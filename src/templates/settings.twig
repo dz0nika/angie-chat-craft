@@ -1,0 +1,274 @@
+{% import '_includes/forms.twig' as forms %}
+
+<style>
+    .angie-chat-settings {
+        max-width: 800px;
+    }
+    .angie-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        font-size: 13px;
+        font-weight: 500;
+    }
+    .angie-status-connected {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .angie-status-disconnected {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    .angie-section-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 8px;
+    }
+    .angie-section-card:hover {
+        border-color: #cbd5e1;
+    }
+    .angie-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .angie-section-name {
+        font-weight: 600;
+        color: #1e293b;
+    }
+    .angie-section-meta {
+        font-size: 13px;
+        color: #64748b;
+        margin-top: 4px;
+    }
+    .angie-entry-count {
+        background: #e2e8f0;
+        color: #475569;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    .angie-sync-button {
+        margin-top: 24px;
+    }
+    .angie-help-text {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+    }
+    .angie-help-text h4 {
+        margin: 0 0 8px 0;
+        color: #1e40af;
+        font-size: 14px;
+    }
+    .angie-help-text p {
+        margin: 0;
+        color: #1e3a8a;
+        font-size: 13px;
+    }
+</style>
+
+<div class="angie-chat-settings">
+    {# Connection Status #}
+    <div style="margin-bottom: 24px;">
+        <h2>Connection Status</h2>
+        {% if syncStatus.connected %}
+            <span class="angie-status-badge angie-status-connected">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M13.5 4.5L6 12L2.5 8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Connected to Angie Chat
+            </span>
+            {% if syncStatus.data.vector_stats is defined %}
+                <p style="margin-top: 8px; color: #64748b; font-size: 13px;">
+                    {{ syncStatus.data.vector_stats.chunk_count ?? 0 }} content chunks synced
+                    {% if syncStatus.data.vector_stats.last_synced_at %}
+                        · Last sync: {{ syncStatus.data.vector_stats.last_synced_at|date('M j, Y g:ia') }}
+                    {% endif %}
+                </p>
+            {% endif %}
+        {% else %}
+            <span class="angie-status-badge angie-status-disconnected">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Not Connected
+            </span>
+            <p style="margin-top: 8px; color: #991b1b; font-size: 13px;">
+                {{ syncStatus.message ?? 'Please enter your license key below.' }}
+            </p>
+        {% endif %}
+    </div>
+
+    <hr>
+
+    {# License Key #}
+    <div style="margin-top: 24px;">
+        <h2>License Key</h2>
+        <div class="angie-help-text">
+            <h4>Where do I find my license key?</h4>
+            <p>
+                Log in to your <a href="https://app.angie-chat.com/dashboard" target="_blank">Angie Chat Dashboard</a>,
+                navigate to your website settings, and copy the Craft License Key.
+            </p>
+        </div>
+
+        {{ forms.passwordField({
+            label: 'Craft License Key',
+            instructions: 'Your unique license key from the Angie Chat dashboard.',
+            id: 'licenseKey',
+            name: 'licenseKey',
+            value: settings.licenseKey,
+            placeholder: 'sk_craft_live_xxxxxxxxxxxxxxxx',
+            required: true,
+            errors: settings.getErrors('licenseKey')
+        }) }}
+    </div>
+
+    <hr>
+
+    {# Content Sections #}
+    <div style="margin-top: 24px;">
+        <h2>Content Sections</h2>
+        <p style="color: #64748b; margin-bottom: 16px;">
+            Select which Craft sections should be synced to the AI. Only content from enabled sections
+            will be used to answer customer questions.
+        </p>
+
+        {% if sections|length > 0 %}
+            <div class="angie-sections-list">
+                {% for section in sections %}
+                    <div class="angie-section-card">
+                        <div class="angie-section-header">
+                            <div>
+                                {{ forms.checkbox({
+                                    label: section.name,
+                                    name: 'enabledSections[]',
+                                    value: section.handle,
+                                    checked: section.handle in settings.enabledSections
+                                }) }}
+                                <div class="angie-section-meta">
+                                    Handle: <code>{{ section.handle }}</code> · Type: {{ section.type|capitalize }}
+                                </div>
+                            </div>
+                            <span class="angie-entry-count">{{ section.entryCount }} entries</span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p style="color: #64748b; font-style: italic;">
+                No sections found. Create some sections in Craft to get started.
+            </p>
+        {% endif %}
+    </div>
+
+    <hr>
+
+    {# Widget Settings #}
+    <div style="margin-top: 24px;">
+        <h2>Widget Settings</h2>
+
+        {{ forms.lightswitchField({
+            label: 'Auto-inject Widget',
+            instructions: 'Automatically add the chat widget to all frontend pages.',
+            id: 'autoInjectWidget',
+            name: 'autoInjectWidget',
+            on: settings.autoInjectWidget
+        }) }}
+
+        {{ forms.textField({
+            label: 'Exclude Pages (CSS Selectors)',
+            instructions: 'Comma-separated CSS selectors. Pages with matching elements will not show the widget.',
+            id: 'excludeSelectors',
+            name: 'excludeSelectors',
+            value: settings.excludeSelectors,
+            placeholder: '.no-chat, #checkout-page',
+            errors: settings.getErrors('excludeSelectors')
+        }) }}
+    </div>
+
+    <hr>
+
+    {# Craft Commerce Integration #}
+    <div style="margin-top: 24px;">
+        <h2>Craft Commerce Integration</h2>
+
+        {% if craft.app.plugins.isPluginInstalled('commerce') and craft.app.plugins.isPluginEnabled('commerce') %}
+            {{ forms.lightswitchField({
+                label: 'Enable Abandoned Cart Recovery',
+                instructions: 'Send abandoned cart data to Angie Chat for AI-powered recovery emails. Requires the Growth Tier subscription.',
+                id: 'enableAbandonedCart',
+                name: 'enableAbandonedCart',
+                on: settings.enableAbandonedCart
+            }) }}
+        {% else %}
+            <div style="background: #f1f5f9; border-radius: 8px; padding: 16px; color: #475569;">
+                <p style="margin: 0;">
+                    <strong>Craft Commerce not detected.</strong><br>
+                    Install and enable Craft Commerce to use abandoned cart recovery features.
+                </p>
+            </div>
+        {% endif %}
+    </div>
+
+    <hr>
+
+    {# Advanced Settings #}
+    <div style="margin-top: 24px;">
+        <h2>Advanced Settings</h2>
+
+        {{ forms.textField({
+            label: 'API Endpoint',
+            instructions: 'The Angie Chat API endpoint. Only change this for testing.',
+            id: 'apiEndpoint',
+            name: 'apiEndpoint',
+            value: settings.apiEndpoint,
+            placeholder: 'https://api.angie-chat.com',
+            errors: settings.getErrors('apiEndpoint')
+        }) }}
+
+        {{ forms.textField({
+            label: 'Widget URL',
+            instructions: 'The URL for the chat widget JavaScript. Only change this for testing.',
+            id: 'widgetUrl',
+            name: 'widgetUrl',
+            value: settings.widgetUrl,
+            placeholder: 'https://cdn.angie-chat.com/widget.js',
+            errors: settings.getErrors('widgetUrl')
+        }) }}
+    </div>
+
+    <hr>
+
+    {# Force Sync Button #}
+    <div class="angie-sync-button" style="margin-top: 24px;">
+        <h2>Sync All Content</h2>
+        <p style="color: #64748b; margin-bottom: 16px;">
+            Use this button to immediately sync all content from enabled sections to the AI.
+            This is useful after first installing the plugin or after making bulk content changes.
+        </p>
+
+        <a href="{{ cpUrl('angie-chat/sync-all') }}" class="btn submit" id="syncAllBtn">
+            Force Sync All Data
+        </a>
+
+        <p style="margin-top: 8px; font-size: 13px; color: #64748b;">
+            This will queue all entries for background processing. Large sites may take several minutes.
+        </p>
+    </div>
+</div>
+
+<script>
+document.getElementById('syncAllBtn')?.addEventListener('click', function(e) {
+    if (!confirm('This will queue all entries from enabled sections for sync. Continue?')) {
+        e.preventDefault();
+    }
+});
+</script>

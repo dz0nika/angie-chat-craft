@@ -1,0 +1,56 @@
+{
+    "name": "nikolapopovic/angie-chat-craft",
+    "description": "AI-powered chat widget and data sync connector for Angie Chat SaaS",
+    "version": "1.0.0",
+    "type": "craft-plugin",
+    "license": "MIT",
+    "keywords": [
+        "craft",
+        "cms",
+        "craftcms",
+        "ai",
+        "chat",
+        "widget",
+        "ecommerce",
+        "customer-service"
+    ],
+    "authors": [
+        {
+            "name": "Nikola Popovic",
+            "email": "hello@angie-chat.com"
+        }
+    ],
+    "support": {
+        "email": "support@angie-chat.com",
+        "docs": "https://docs.angie-chat.com/craft-plugin"
+    },
+    "require": {
+        "php": "^8.2",
+        "craftcms/cms": "^5.0",
+        "guzzlehttp/guzzle": "^7.0"
+    },
+    "suggest": {
+        "craftcms/commerce": "Required for abandoned cart recovery feature"
+    },
+    "autoload": {
+        "psr-4": {
+            "nikolapopovic\\angiechat\\": "src/"
+        }
+    },
+    "extra": {
+        "handle": "angie-chat",
+        "name": "Angie Chat",
+        "developer": "Nikola Popovic",
+        "developerUrl": "https://angie-chat.com",
+        "documentationUrl": "https://docs.angie-chat.com/craft-plugin",
+        "class": "nikolapopovic\\angiechat\\AngieChat"
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true,
+        "allow-plugins": {
+            "craftcms/plugin-installer": true,
+            "yiisoft/yii2-composer": true
+        }
+    }
+}
