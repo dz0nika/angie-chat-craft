@@ -3,95 +3,127 @@
 namespace nikolapopovic\angiechat\jobs;
 
 use Craft;
+use craft\elements\Entry;
 use craft\queue\BaseJob;
 use nikolapopovic\angiechat\AngieChat;
 
 /**
- * Sync Element Job - Sends content to the Laravel backend.
+ * Sync Element Job – builds the payload and sends it to the Laravel backend.
  *
- * This job runs in the background via Craft's queue system.
- * It sends entry data to the Angie Chat API for vector embedding.
+ * Phase 2 fix: payload extraction (Matrix traversal, image lookup, etc.) now
+ * happens here, inside the queue worker, NOT inside the EVENT_AFTER_SAVE
+ * listener. The event handler stores only lightweight identifiers so the
+ * Control Panel save feels instant regardless of content complexity.
+ *
+ * For "upsert" actions the entry is re-loaded by ID so the latest persisted
+ * state is used (handles edge cases where a second save fires before the
+ * first job runs).
+ *
+ * For "delete" actions the entry is already gone; we just forward the IDs
+ * we captured at event time.
  */
 class SyncElementJob extends BaseJob
 {
-    /**
-     * The payload data to send.
-     */
-    public array $payload = [];
+    /** Primary key of the Craft entry. */
+    public int $entryId;
 
-    /**
-     * The action type: 'upsert' or 'delete'
-     */
+    /** Craft UID – used as the vector record identifier on delete. */
+    public string $entryUid;
+
+    /** Craft site ID. */
+    public int $siteId;
+
+    /** 'upsert' or 'delete' */
     public string $action = 'upsert';
 
     public function execute($queue): void
     {
-        // Validate plugin is available
         if (! AngieChat::$plugin) {
-            Craft::warning('Angie Chat: Plugin not initialized, skipping sync job', __METHOD__);
-
+            Craft::warning('Angie Chat: Plugin not initialised, skipping sync job', __METHOD__);
             return;
         }
-
-        $entryId = $this->payload['entry_id'] ?? 'unknown';
 
         try {
             $apiService = AngieChat::$plugin->getApi();
 
             if ($this->action === 'delete') {
-                $response = $apiService->delete([
-                    'entry_id' => $this->payload['entry_id'] ?? 0,
-                    'entry_uid' => $this->payload['entry_uid'] ?? '',
-                    'site_id' => $this->payload['site_id'] ?? 1,
+                $apiService->delete([
+                    'entry_id'  => $this->entryId,
+                    'entry_uid' => $this->entryUid,
+                    'site_id'   => $this->siteId,
                 ]);
-            } else {
-                $response = $apiService->upsert($this->payload);
+
+                AngieChat::log('info', "Entry #{$this->entryId} removed from AI index", [
+                    'entry_id' => $this->entryId,
+                    'action'   => 'delete',
+                ]);
+
+                return;
             }
 
-            Craft::info(
-                "Angie Chat: Successfully synced entry #{$entryId} ({$this->action})",
-                __METHOD__
-            );
+            // Re-load entry inside the job so payload building is fully async
+            $entry = Entry::find()
+                ->id($this->entryId)
+                ->siteId($this->siteId)
+                ->status(null)
+                ->one();
+
+            if (! $entry) {
+                // Entry deleted between event and job execution – silently skip
+                Craft::info(
+                    "Angie Chat: Entry #{$this->entryId} no longer exists, skipping upsert",
+                    __METHOD__
+                );
+                return;
+            }
+
+            $payload           = AngieChat::$plugin->getPayload()->buildFromEntry($entry);
+            $payload['action'] = 'upsert';
+
+            $apiService->upsert($payload);
+
+            AngieChat::log('info', "Entry #{$this->entryId} synced to AI index", [
+                'entry_id' => $this->entryId,
+                'title'    => $payload['title'] ?? '',
+                'section'  => $payload['section'] ?? '',
+                'action'   => 'upsert',
+            ]);
+
         } catch (\Exception $e) {
+            $errorMsg = $e->getMessage();
+
+            AngieChat::log('error', "Failed to sync entry #{$this->entryId}: {$errorMsg}", [
+                'entry_id' => $this->entryId,
+                'action'   => $this->action,
+                'error'    => $errorMsg,
+            ]);
+
             Craft::error(
-                "Angie Chat: Failed to sync entry #{$entryId}: ".$e->getMessage(),
+                "Angie Chat: Failed to sync entry #{$this->entryId}: {$errorMsg}",
                 __METHOD__
             );
 
-            if ($this->isRetryableError($e)) {
+            if ($this->isRetryable($errorMsg)) {
                 throw $e;
             }
-            // Non-retryable errors are logged but don't re-throw
         }
     }
 
     protected function defaultDescription(): ?string
     {
-        $entryId = $this->payload['entry_id'] ?? 'unknown';
-        $title = $this->payload['title'] ?? '';
-
         if ($this->action === 'delete') {
-            return "Angie Chat: Remove entry #{$entryId} from AI";
+            return "Angie Chat: Remove entry #{$this->entryId} from AI";
         }
 
-        $titlePart = $title ? " \"{$title}\"" : '';
-
-        return "Angie Chat: Sync entry #{$entryId}{$titlePart} to AI";
+        return "Angie Chat: Sync entry #{$this->entryId} to AI";
     }
 
-    private function isRetryableError(\Exception $e): bool
+    private function isRetryable(string $message): bool
     {
-        $message = strtolower($e->getMessage());
-
-        $nonRetryable = [
-            'invalid license',
-            'expired license',
-            'unauthorized',
-            '401',
-        ];
+        $nonRetryable = ['invalid license', 'expired license', 'unauthorized', '401'];
 
         foreach ($nonRetryable as $keyword) {
-            if (str_contains($message, $keyword)) {
+            if (str_contains(strtolower($message), $keyword)) {
                 return false;
             }
         }

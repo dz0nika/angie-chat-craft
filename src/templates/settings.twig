@@ -198,16 +198,25 @@
 
     {# Craft Commerce Integration #}
     <div style="margin-top: 24px;">
-        <h2>Craft Commerce Integration</h2>
+        <h2>Craft Commerce — Abandoned Cart Recovery</h2>
 
         {% if craft.app.plugins.isPluginInstalled('commerce') and craft.app.plugins.isPluginEnabled('commerce') %}
             {{ forms.lightswitchField({
                 label: 'Enable Abandoned Cart Recovery',
-                instructions: 'Send abandoned cart data to Angie Chat for AI-powered recovery emails. Requires the Growth Tier subscription.',
+                instructions: 'Enables the cron-based cart check. Requires a scheduled command – see the plugin README for cron setup. Requires the Growth Tier subscription.',
                 id: 'enableAbandonedCart',
                 name: 'enableAbandonedCart',
                 on: settings.enableAbandonedCart
             }) }}
+
+            {% if settings.enableAbandonedCart %}
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 16px; margin-top: 12px; font-size: 13px; color: #1e40af;">
+                    <strong>Cron required.</strong> Add this to your server's crontab to check for abandoned carts every 30 minutes:<br>
+                    <code style="display:block; margin-top:8px; background:#dbeafe; padding:6px 10px; border-radius:4px;">
+                        0,30 * * * * {{ craft.app.path.getBasePath() }}/craft angie-chat/carts/check-abandoned
+                    </code>
+                </div>
+            {% endif %}
         {% else %}
             <div style="background: #f1f5f9; border-radius: 8px; padding: 16px; color: #475569;">
                 <p style="margin: 0;">

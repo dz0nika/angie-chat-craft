@@ -45,13 +45,14 @@ class SyncController extends Controller
             return $this->redirect('settings/plugins/angie-chat');
         }
 
-        $payloadBuilder = AngieChat::$plugin->getPayload();
         $queuedCount = 0;
         $batchSize = 50;
 
         try {
             foreach ($enabledSections as $sectionHandle) {
-                // Use batch processing to avoid memory issues on large sites
+                // Use batch processing to avoid memory issues on large sites.
+                // Pass only lightweight identifiers – payload building happens
+                // inside SyncElementJob::execute() on the queue worker.
                 $query = Entry::find()
                     ->section($sectionHandle)
                     ->status('live');
@@ -61,17 +62,18 @@ class SyncController extends Controller
 
                 while ($offset < $totalEntries) {
                     $entries = $query
+                        ->select(['elements.id', 'elements.uid', 'elements_sites.siteId'])
                         ->offset($offset)
                         ->limit($batchSize)
                         ->all();
 
                     foreach ($entries as $entry) {
                         try {
-                            $payload = $payloadBuilder->buildFromEntry($entry);
-
                             Craft::$app->getQueue()->push(new SyncElementJob([
-                                'payload' => $payload,
-                                'action' => 'upsert',
+                                'entryId'  => (int) $entry->id,
+                                'entryUid' => (string) $entry->uid,
+                                'siteId'   => (int) $entry->siteId,
+                                'action'   => 'upsert',
                             ]));
 
                             $queuedCount++;
@@ -80,7 +82,7 @@ class SyncController extends Controller
                         }
                     }
 
-                    // Clear memory between batches
+                    // Release memory between batches
                     $offset += $batchSize;
                     gc_collect_cycles();
                 }

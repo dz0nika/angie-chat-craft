@@ -1,7 +1,6 @@
 {
-    "name": "nikolapopovic/angie-chat-craft",
-    "description": "AI-powered chat widget and data sync connector for Angie Chat SaaS",
-    "version": "1.0.0",
+    "name": "dz0nika/angie-chat-craft",
+    "description": "Craft CMS AI-powered chat widget and data sync connector for Angie Chat SaaS",
     "type": "craft-plugin",
     "license": "MIT",
     "keywords": [

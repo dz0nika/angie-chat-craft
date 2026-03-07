@@ -32,11 +32,18 @@ class WidgetService extends Component
             }
 
             $attributes = [
-                'src' => $settings->widgetUrl,
+                'src'          => $settings->widgetUrl,
                 'data-license' => $settings->licenseKey,
-                'data-api' => $settings->apiEndpoint,
-                'defer' => true,
+                'data-api'     => $settings->apiEndpoint,
+                'defer'        => true,
             ];
+
+            // Pass exclude selectors to the widget JS for client-side evaluation.
+            // The widget reads data-exclude and calls document.querySelector() on
+            // each selector – if a match is found the widget stays hidden.
+            if (! empty($settings->excludeSelectors)) {
+                $attributes['data-exclude'] = $settings->excludeSelectors;
+            }
 
             if ($settings->isTestMode()) {
                 $attributes['data-test-mode'] = 'true';
@@ -98,13 +105,52 @@ class WidgetService extends Component
     }
 
     /**
-     * Check if current URL should be excluded.
+     * Server-side URL exclusion: checks whether the current request path
+     * matches any path pattern in the exclude list.
+     *
+     * CSS selectors (e.g. ".no-chat", "#checkout") are passed through to the
+     * widget via data-exclude and evaluated client-side by the widget JS.
+     * Only patterns that start with "/" are treated as URL path prefixes here.
+     *
+     * Example settings value: ".no-chat, /checkout, /account"
+     * → ".no-chat" → skipped here, handled by widget JS
+     * → "/checkout" → excluded if the current URL path starts with /checkout
+     * → "/account"  → excluded if the current URL path starts with /account
      */
     private function isExcludedByUrl(): bool
     {
         $settings = $this->getSettings();
 
         if (empty($settings->excludeSelectors)) {
+            return false;
+        }
+
+        try {
+            $currentPath = Craft::$app->getRequest()->getPathInfo();
+            $currentPath = '/' . ltrim($currentPath, '/');
+
+            $patterns = array_map('trim', explode(',', $settings->excludeSelectors));
+
+            foreach ($patterns as $pattern) {
+                if (empty($pattern) || $pattern[0] !== '/') {
+                    continue; // CSS selector – handled client-side
+                }
+
+                $normalised = rtrim($pattern, '/');
+
+                if ($normalised === '' || $normalised === '/') {
+                    if ($currentPath === '/') {
+                        return true;
+                    }
+                    continue;
+                }
+
+                // Match exact path or any sub-path (e.g. /checkout matches /checkout/step-2)
+                if ($currentPath === $normalised || str_starts_with($currentPath, $normalised . '/')) {
+                    return true;
+                }
+            }
+        } catch (\Exception $e) {
             return false;
         }
 

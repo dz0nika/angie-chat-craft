@@ -5,6 +5,7 @@ namespace nikolapopovic\angiechat\jobs;
 use Craft;
 use craft\queue\BaseJob;
 use nikolapopovic\angiechat\AngieChat;
+use nikolapopovic\angiechat\jobs\LogJob;
 
 /**
  * Abandoned Cart Job - Sends cart data to Laravel for recovery emails.
@@ -65,12 +66,14 @@ class AbandonedCartJob extends BaseJob
 
         try {
             $apiService = AngieChat::$plugin->getApi();
-            $response = $apiService->abandonedCart($payload);
+            $apiService->abandonedCart($payload);
 
-            Craft::info(
-                "Angie Chat: Abandoned cart #{$this->orderId} sent for recovery",
-                __METHOD__
-            );
+            AngieChat::log('info', "Abandoned cart #{$this->orderId} queued for recovery", [
+                'order_id'   => $this->orderId,
+                'email'      => $this->email,
+                'cart_value' => $payload['cart_value'] ?? 0,
+                'item_count' => count($payload['items'] ?? []),
+            ]);
         } catch (\Exception $e) {
             $message = strtolower($e->getMessage());
 
@@ -87,8 +90,13 @@ class AbandonedCartJob extends BaseJob
                 return;
             }
 
+            AngieChat::log('error', "Failed to send abandoned cart #{$this->orderId}: {$e->getMessage()}", [
+                'order_id' => $this->orderId,
+                'error'    => $e->getMessage(),
+            ]);
+
             Craft::error(
-                "Angie Chat: Failed to send abandoned cart #{$this->orderId}: ".$e->getMessage(),
+                "Angie Chat: Failed to send abandoned cart #{$this->orderId}: " . $e->getMessage(),
                 __METHOD__
             );
 

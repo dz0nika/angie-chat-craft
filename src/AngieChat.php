@@ -6,13 +6,14 @@ use Craft;
 use craft\base\Element;
 use craft\base\Model;
 use craft\base\Plugin;
+use craft\console\Application as ConsoleApplication;
 use craft\elements\Entry;
 use craft\events\ModelEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use craft\web\View;
-use nikolapopovic\angiechat\jobs\AbandonedCartJob;
+use nikolapopovic\angiechat\jobs\LogJob;
 use nikolapopovic\angiechat\jobs\SyncElementJob;
 use nikolapopovic\angiechat\models\Settings;
 use nikolapopovic\angiechat\services\ApiService;
@@ -47,6 +48,11 @@ class AngieChat extends Plugin
     {
         parent::init();
         self::$plugin = $this;
+
+        // Register console controllers (abandoned cart cron command)
+        if (Craft::$app instanceof ConsoleApplication) {
+            $this->controllerNamespace = 'nikolapopovic\\angiechat\\console\\controllers';
+        }
 
         $this->registerServices();
         $this->registerCpRoutes();
@@ -108,7 +114,9 @@ class AngieChat extends Plugin
 
         $this->registerEntryEvents();
         $this->registerWidgetInjection();
-        $this->registerCommerceEvents();
+        // Note: abandoned cart recovery is handled via the console command:
+        //   php craft angie-chat/carts/check-abandoned
+        // Schedule it with cron – see README for details.
     }
 
     private function registerEntryEvents(): void
@@ -183,81 +191,6 @@ class AngieChat extends Plugin
         );
     }
 
-    private function registerCommerceEvents(): void
-    {
-        if (! $this->isCommerceInstalled()) {
-            return;
-        }
-
-        /** @var Settings $settings */
-        $settings = $this->getSettings();
-
-        if (! $settings->enableAbandonedCart) {
-            return;
-        }
-
-        $this->registerCommerceCartEvents();
-    }
-
-    private function registerCommerceCartEvents(): void
-    {
-        $commerceOrderClass = 'craft\\commerce\\elements\\Order';
-
-        if (! class_exists($commerceOrderClass)) {
-            return;
-        }
-
-        Event::on(
-            $commerceOrderClass,
-            'afterSave',
-            function ($event) {
-                $order = $event->sender;
-
-                if (! method_exists($order, 'getIsCompleted') || $order->getIsCompleted()) {
-                    return;
-                }
-
-                if (! method_exists($order, 'getEmail') || empty($order->getEmail())) {
-                    return;
-                }
-
-                $this->checkForAbandonedCart($order);
-            }
-        );
-
-        Craft::info('Angie Chat: Commerce abandoned cart events registered', __METHOD__);
-    }
-
-    private function checkForAbandonedCart($order): void
-    {
-        try {
-            $abandonmentThreshold = 30 * 60;
-
-            $lastUpdated = $order->dateUpdated ?? $order->dateCreated ?? null;
-            if (! $lastUpdated || ! ($lastUpdated instanceof \DateTime || $lastUpdated instanceof \DateTimeInterface)) {
-                return;
-            }
-
-            $timeSinceUpdate = time() - $lastUpdated->getTimestamp();
-
-            if ($timeSinceUpdate < $abandonmentThreshold) {
-                return;
-            }
-
-            $email = method_exists($order, 'getEmail') ? $order->getEmail() : null;
-            if (empty($email) || ! isset($order->id)) {
-                return;
-            }
-
-            Craft::$app->getQueue()->push(new AbandonedCartJob([
-                'orderId' => (int) $order->id,
-                'email' => (string) $email,
-            ]));
-        } catch (\Exception $e) {
-            Craft::warning('Angie Chat: Error checking abandoned cart: ' . $e->getMessage(), __METHOD__);
-        }
-    }
-
     private function shouldSyncEntry(Entry $entry, array $enabledSections): bool
     {
         if ($entry->getIsDraft() || $entry->getIsRevision()) {
@@ -275,20 +208,18 @@ class AngieChat extends Plugin
     private function dispatchSyncJob(Entry $entry, string $action): void
     {
         try {
-            /** @var PayloadBuilder $payloadBuilder */
-            $payloadBuilder = $this->payload;
-
-            $payload = $payloadBuilder->buildFromEntry($entry);
-            $payload['action'] = $action;
-
+            // Phase 2: pass only lightweight identifiers. All heavy payload
+            // building (Matrix traversal, image lookup) happens inside
+            // SyncElementJob::execute() – fully off the request thread.
             Craft::$app->getQueue()->push(new SyncElementJob([
-                'payload' => $payload,
-                'action' => $action,
+                'entryId'  => (int) $entry->id,
+                'entryUid' => (string) $entry->uid,
+                'siteId'   => (int) $entry->siteId,
+                'action'   => $action,
             ]));
 
             Craft::info("Angie Chat: Queued {$action} for entry #{$entry->id}", __METHOD__);
         } catch (\Exception $e) {
-            // Never let our plugin crash the user's save operation
             Craft::error("Angie Chat: Failed to queue {$action} for entry #{$entry->id}: " . $e->getMessage(), __METHOD__);
         }
     }
@@ -354,12 +285,6 @@ class AngieChat extends Plugin
         }
     }
 
-    private function isCommerceInstalled(): bool
-    {
-        return Craft::$app->getPlugins()->isPluginInstalled('commerce')
-            && Craft::$app->getPlugins()->isPluginEnabled('commerce');
-    }
-
     public function getApi(): ApiService
     {
         return $this->api;
@@ -373,5 +298,33 @@ class AngieChat extends Plugin
     public function getWidget(): WidgetService
     {
         return $this->widget;
+    }
+
+    /**
+     * Queue a log entry to be streamed to the Laravel backend.
+     * Safe to call from anywhere – silently does nothing if the plugin
+     * is not initialised or no license key is configured.
+     */
+    public static function log(string $level, string $message, array $context = []): void
+    {
+        try {
+            if (! self::$plugin) {
+                return;
+            }
+
+            $settings = self::$plugin->getSettings();
+            if (empty($settings->licenseKey)) {
+                return;
+            }
+
+            Craft::$app->getQueue()->push(new LogJob([
+                'level'   => $level,
+                'message' => $message,
+                'context' => $context,
+            ]));
+        } catch (\Throwable $e) {
+            // Absolute last resort – write to Craft's own log only
+            Craft::warning("Angie Chat: Could not queue log job: {$e->getMessage()}", __METHOD__);
+        }
     }
 }
