@@ -18,10 +18,10 @@ return [
     'enableAbandonedCart' => false,
 
     // API endpoint (override for testing/staging)
-    'apiEndpoint' => 'https://api.angie-chat.com',
+    'apiEndpoint' => 'https://app.angiechat.com',
 
     // Widget script URL (override for testing/staging)
-    'widgetUrl' => 'https://cdn.angie-chat.com/widget.js',
+    'widgetUrl' => 'https://cdn.angiechat.com/widget.js',
 
     // Auto-inject widget on frontend pages
     'autoInjectWidget' => true,

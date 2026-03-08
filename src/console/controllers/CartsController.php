@@ -53,7 +53,14 @@ class CartsController extends Controller
         }
 
         if (! $settings->enableAbandonedCart) {
-            $this->stdout("Angie Chat: Abandoned cart recovery is disabled in settings.\n");
+            $this->stdout("Angie Chat: Abandoned cart recovery is disabled in plugin settings.\n");
+            return ExitCode::OK;
+        }
+
+        // Verify the subscription includes this feature before hitting Commerce
+        if (! AngieChat::hasFeature('abandoned-cart')) {
+            $this->stdout("Angie Chat: Abandoned cart recovery is not active on your current plan.\n");
+            $this->stdout("Upgrade to the Growth Tier at https://app.angie-chat.com/dashboard/billing\n");
             return ExitCode::OK;
         }
 

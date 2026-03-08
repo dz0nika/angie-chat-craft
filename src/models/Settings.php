@@ -33,12 +33,12 @@ class Settings extends Model
      * The API endpoint URL for the Angie Chat backend.
      * Can be overridden for testing/staging environments.
      */
-    public string $apiEndpoint = 'https://api.angie-chat.com';
+    public string $apiEndpoint = 'https://app.angiechat.com';
 
     /**
      * The CDN URL for the widget JavaScript.
      */
-    public string $widgetUrl = 'https://cdn.angie-chat.com/widget.js';
+    public string $widgetUrl = 'https://cdn.angiechat.com/widget.js';
 
     /**
      * Whether to inject the widget script automatically.
@@ -85,6 +85,6 @@ class Settings extends Model
     {
         $baseUrl = rtrim($this->apiEndpoint, '/');
 
-        return $baseUrl.'/api/v1/craft/'.ltrim($endpoint, '/');
+        return $baseUrl . '/api/v1/craft/' . ltrim($endpoint, '/');
     }
 }

@@ -79,17 +79,55 @@ class ApiService extends Component
             $response = $this->get('status');
 
             return [
-                'connected' => true,
-                'message' => 'Connected to Angie Chat',
-                'data' => $response,
+                'connected'        => true,
+                'message'          => 'Connected to Angie Chat',
+                'data'             => $response,
+                'enabled_features' => $response['enabled_features'] ?? [],
             ];
         } catch (\Exception $e) {
             return [
-                'connected' => false,
-                'message' => $e->getMessage(),
-                'data' => null,
+                'connected'        => false,
+                'message'          => $e->getMessage(),
+                'data'             => null,
+                'enabled_features' => [],
             ];
         }
+    }
+
+    /**
+     * Return the feature slugs active for this license, cached for 5 minutes.
+     *
+     * Uses the /status endpoint which already returns enabled_features, so no
+     * extra HTTP round-trip is needed.
+     *
+     * @return string[]
+     */
+    public function getEnabledFeatures(): array
+    {
+        $cacheKey = 'angie_chat_enabled_features_' . md5($this->getSettings()->licenseKey);
+        $cached   = Craft::$app->getCache()->get($cacheKey);
+
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        try {
+            $response = $this->get('status');
+            $features = $response['enabled_features'] ?? [];
+            Craft::$app->getCache()->set($cacheKey, $features, 300); // 5 min TTL
+            return $features;
+        } catch (\Exception $e) {
+            // Backend unreachable – return empty but don't cache so we retry next time
+            return [];
+        }
+    }
+
+    /**
+     * Check whether a specific feature slug is active for this license.
+     */
+    public function hasFeature(string $slug): bool
+    {
+        return in_array($slug, $this->getEnabledFeatures(), true);
     }
 
     /**

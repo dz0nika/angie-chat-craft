@@ -16,12 +16,12 @@
     "authors": [
         {
             "name": "Nikola Popovic",
-            "email": "hello@angie-chat.com"
+            "email": "hello@angiechat.com"
         }
     ],
     "support": {
-        "email": "support@angie-chat.com",
-        "docs": "https://docs.angie-chat.com/craft-plugin"
+        "email": "support@angiechat.com",
+        "docs": "https://docs.angiechat.com/craft-plugin"
     },
     "require": {
         "php": "^8.2",
@@ -40,8 +40,8 @@
         "handle": "angie-chat",
         "name": "Angie Chat",
         "developer": "Nikola Popovic",
-        "developerUrl": "https://angie-chat.com",
-        "documentationUrl": "https://docs.angie-chat.com/craft-plugin",
+        "developerUrl": "https://angiechat.com",
+        "documentationUrl": "https://docs.angiechat.com/craft-plugin",
         "class": "nikolapopovic\\angiechat\\AngieChat"
     },
     "config": {

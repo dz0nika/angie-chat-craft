@@ -73,11 +73,15 @@ class AngieChat extends Plugin
 
     protected function settingsHtml(): ?string
     {
+        $syncStatus      = $this->getSyncStatus();
+        $enabledFeatures = $syncStatus['enabled_features'] ?? [];
+
         return Craft::$app->getView()->renderTemplate('angie-chat/settings', [
-            'plugin' => $this,
-            'settings' => $this->getSettings(),
-            'sections' => $this->getAvailableSections(),
-            'syncStatus' => $this->getSyncStatus(),
+            'plugin'          => $this,
+            'settings'        => $this->getSettings(),
+            'sections'        => $this->getAvailableSections(),
+            'syncStatus'      => $syncStatus,
+            'enabledFeatures' => $enabledFeatures,
         ]);
     }
 
@@ -298,6 +302,24 @@ class AngieChat extends Plugin
     public function getWidget(): WidgetService
     {
         return $this->widget;
+    }
+
+    /**
+     * Check whether a feature is active for this license key.
+     * Returns false when the plugin is not initialised or there is no license key.
+     * Uses a 5-minute cache so repeated calls within a request are free.
+     */
+    public static function hasFeature(string $slug): bool
+    {
+        if (! self::$plugin) {
+            return false;
+        }
+
+        try {
+            return self::$plugin->getApi()->hasFeature($slug);
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**

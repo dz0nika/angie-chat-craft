@@ -6,7 +6,7 @@ AI-powered customer service chat widget for Craft CMS 5. This plugin connects yo
 
 - Craft CMS 5.0 or later
 - PHP 8.2 or later
-- An active [Angie Chat](https://angie-chat.com) subscription
+- An active [Angie Chat](https://angiechat.com) subscription
 
 ## Installation
 
@@ -24,7 +24,7 @@ Search for "Angie Chat" in the Craft Plugin Store and click Install.
 ## Configuration
 
 1. **Get Your License Key**
-   - Log in to your [Angie Chat Dashboard](https://app.angie-chat.com)
+   - Log in to your [Angie Chat Dashboard](https://app.angiechat.com)
    - Navigate to **Websites** → Select your website → **Settings**
    - Copy your **Craft License Key**
 
@@ -80,8 +80,8 @@ return [
     'licenseKey' => getenv('ANGIE_LICENSE_KEY'),
     'enabledSections' => ['products', 'articles'],
     'enableAbandonedCart' => true,
-    'apiEndpoint' => 'https://api.angie-chat.com',
-    'widgetUrl' => 'https://cdn.angie-chat.com/widget.js',
+    'apiEndpoint' => 'https://app.angiechat.com',
+    'widgetUrl' => 'https://cdn.angiechat.com/widget.js',
     'autoInjectWidget' => true,
     'excludeSelectors' => '.no-chat, #checkout',
 ];
@@ -103,7 +103,7 @@ If you disable auto-injection, add the widget manually in your template:
 
 - Verify your license key is correct
 - Check that your Angie Chat subscription is active
-- Ensure your server can reach `api.angie-chat.com`
+- Ensure your server can reach `app.angiechat.com`
 
 ### Content Not Syncing
 
@@ -119,9 +119,9 @@ If you disable auto-injection, add the widget manually in your template:
 
 ## Support
 
-- Documentation: [docs.angie-chat.com](https://docs.angie-chat.com)
-- Email: support@angie-chat.com
-- Dashboard: [app.angie-chat.com](https://app.angie-chat.com)
+- Documentation: [docs.angiechat.com](https://docs.angiechat.com)
+- Email: support@angiechat.com
+- Dashboard: [app.angiechat.com](https://app.angiechat.com)
 
 ## License
 
