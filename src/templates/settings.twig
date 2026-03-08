@@ -246,33 +246,6 @@
 
     <hr>
 
-    {# Advanced Settings #}
-    <div style="margin-top: 24px;">
-        <h2>Advanced Settings</h2>
-
-        {{ forms.textField({
-            label: 'API Endpoint',
-            instructions: 'The Angie Chat API endpoint. Only change this for testing.',
-            id: 'apiEndpoint',
-            name: 'apiEndpoint',
-            value: settings.apiEndpoint,
-            placeholder: 'https://app.angiechat.com',
-            errors: settings.getErrors('apiEndpoint')
-        }) }}
-
-        {{ forms.textField({
-            label: 'Widget URL',
-            instructions: 'The URL for the chat widget JavaScript. Only change this for testing.',
-            id: 'widgetUrl',
-            name: 'widgetUrl',
-            value: settings.widgetUrl,
-            placeholder: 'https://cdn.angiechat.com/widget.js',
-            errors: settings.getErrors('widgetUrl')
-        }) }}
-    </div>
-
-    <hr>
-
     {# Force Sync Button #}
     <div class="angie-sync-button" style="margin-top: 24px;">
         <h2>Sync All Content</h2>
