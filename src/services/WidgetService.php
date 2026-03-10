@@ -34,8 +34,7 @@ class WidgetService extends Component
             $attributes = [
                 'src'          => $settings->widgetUrl,
                 'data-license' => $settings->licenseKey,
-                'data-api'     => $settings->apiEndpoint,
-                'defer'        => true,
+                'async'        => true,
             ];
 
             // Pass exclude selectors to the widget JS for client-side evaluation.
