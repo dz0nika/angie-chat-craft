@@ -1,11 +1,11 @@
 <?php
 
-namespace nikolapopovic\angiechat\services;
+namespace Dz0nika\AngieChatCraft\services;
 
 use Craft;
 use craft\base\Component;
-use nikolapopovic\angiechat\AngieChat;
-use nikolapopovic\angiechat\models\Settings;
+use Dz0nika\AngieChatCraft\AngieChat;
+use Dz0nika\AngieChatCraft\models\Settings;
 
 /**
  * Widget Service - Handles frontend chat widget injection.

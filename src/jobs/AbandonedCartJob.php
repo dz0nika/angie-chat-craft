@@ -1,11 +1,11 @@
 <?php
 
-namespace nikolapopovic\angiechat\jobs;
+namespace Dz0nika\AngieChatCraft\jobs;
 
 use Craft;
 use craft\queue\BaseJob;
-use nikolapopovic\angiechat\AngieChat;
-use nikolapopovic\angiechat\jobs\LogJob;
+use Dz0nika\AngieChatCraft\AngieChat;
+use Dz0nika\AngieChatCraft\jobs\LogJob;
 
 /**
  * Abandoned Cart Job - Sends cart data to Laravel for recovery emails.

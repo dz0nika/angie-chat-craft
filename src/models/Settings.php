@@ -1,6 +1,6 @@
 <?php
 
-namespace nikolapopovic\angiechat\models;
+namespace Dz0nika\AngieChatCraft\models;
 
 use craft\base\Model;
 

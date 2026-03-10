@@ -1,12 +1,12 @@
 <?php
 
-namespace nikolapopovic\angiechat\controllers;
+namespace Dz0nika\AngieChatCraft\controllers;
 
 use Craft;
 use craft\elements\Entry;
 use craft\web\Controller;
-use nikolapopovic\angiechat\AngieChat;
-use nikolapopovic\angiechat\jobs\SyncElementJob;
+use Dz0nika\AngieChatCraft\AngieChat;
+use Dz0nika\AngieChatCraft\jobs\SyncElementJob;
 use yii\web\Response;
 
 /**

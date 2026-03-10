@@ -1,8 +1,8 @@
 <?php
 
-namespace nikolapopovic\angiechat\variables;
+namespace Dz0nika\AngieChatCraft\variables;
 
-use nikolapopovic\angiechat\AngieChat;
+use Dz0nika\AngieChatCraft\AngieChat;
 
 /**
  * Twig Variable Class - Exposes plugin functionality to Twig templates.

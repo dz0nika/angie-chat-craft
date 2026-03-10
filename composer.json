@@ -33,7 +33,7 @@
     },
     "autoload": {
         "psr-4": {
-            "nikolapopovic\\angiechat\\": "src/"
+            "Dz0nika\\AngieChatCraft\\": "src/"
         }
     },
     "extra": {
@@ -42,7 +42,7 @@
         "developer": "Nikola Popovic",
         "developerUrl": "https://angiechat.com",
         "documentationUrl": "https://docs.angiechat.com/craft-plugin",
-        "class": "nikolapopovic\\angiechat\\AngieChat"
+        "class": "Dz0nika\\AngieChatCraft\\AngieChat"
     },
     "config": {
         "sort-packages": true,

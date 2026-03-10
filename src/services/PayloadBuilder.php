@@ -1,6 +1,6 @@
 <?php
 
-namespace nikolapopovic\angiechat\services;
+namespace Dz0nika\AngieChatCraft\services;
 
 use Craft;
 use craft\base\Component;

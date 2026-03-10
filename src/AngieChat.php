@@ -1,6 +1,6 @@
 <?php
 
-namespace nikolapopovic\angiechat;
+namespace Dz0nika\AngieChatCraft;
 
 use Craft;
 use craft\base\Element;
@@ -13,13 +13,13 @@ use craft\events\RegisterUrlRulesEvent;
 use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use craft\web\View;
-use nikolapopovic\angiechat\jobs\LogJob;
-use nikolapopovic\angiechat\jobs\SyncElementJob;
-use nikolapopovic\angiechat\models\Settings;
-use nikolapopovic\angiechat\services\ApiService;
-use nikolapopovic\angiechat\services\PayloadBuilder;
-use nikolapopovic\angiechat\services\WidgetService;
-use nikolapopovic\angiechat\variables\AngieChatVariable;
+use Dz0nika\AngieChatCraft\jobs\LogJob;
+use Dz0nika\AngieChatCraft\jobs\SyncElementJob;
+use Dz0nika\AngieChatCraft\models\Settings;
+use Dz0nika\AngieChatCraft\services\ApiService;
+use Dz0nika\AngieChatCraft\services\PayloadBuilder;
+use Dz0nika\AngieChatCraft\services\WidgetService;
+use Dz0nika\AngieChatCraft\variables\AngieChatVariable;
 use yii\base\Event;
 
 /**
@@ -51,7 +51,7 @@ class AngieChat extends Plugin
 
         // Register console controllers (abandoned cart cron command)
         if (Craft::$app instanceof ConsoleApplication) {
-            $this->controllerNamespace = 'nikolapopovic\\angiechat\\console\\controllers';
+            $this->controllerNamespace = 'Dz0nika\\AngieChatCraft\\console\\controllers';
         }
 
         $this->registerServices();

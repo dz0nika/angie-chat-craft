@@ -1,11 +1,11 @@
 <?php
 
-namespace nikolapopovic\angiechat\jobs;
+namespace Dz0nika\AngieChatCraft\jobs;
 
 use Craft;
 use craft\queue\BaseJob;
 use GuzzleHttp\Client;
-use nikolapopovic\angiechat\AngieChat;
+use Dz0nika\AngieChatCraft\AngieChat;
 
 /**
  * Log Job – streams a structured log entry to the Laravel backend.

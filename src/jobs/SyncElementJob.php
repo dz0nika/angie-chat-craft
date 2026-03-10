@@ -1,11 +1,11 @@
 <?php
 
-namespace nikolapopovic\angiechat\jobs;
+namespace Dz0nika\AngieChatCraft\jobs;
 
 use Craft;
 use craft\elements\Entry;
 use craft\queue\BaseJob;
-use nikolapopovic\angiechat\AngieChat;
+use Dz0nika\AngieChatCraft\AngieChat;
 
 /**
  * Sync Element Job – builds the payload and sends it to the Laravel backend.

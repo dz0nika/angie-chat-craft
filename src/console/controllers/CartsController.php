@@ -1,11 +1,11 @@
 <?php
 
-namespace nikolapopovic\angiechat\console\controllers;
+namespace Dz0nika\AngieChatCraft\console\controllers;
 
 use Craft;
 use craft\console\Controller;
-use nikolapopovic\angiechat\AngieChat;
-use nikolapopovic\angiechat\jobs\AbandonedCartJob;
+use Dz0nika\AngieChatCraft\AngieChat;
+use Dz0nika\AngieChatCraft\jobs\AbandonedCartJob;
 use yii\console\ExitCode;
 
 /**

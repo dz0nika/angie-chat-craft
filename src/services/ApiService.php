@@ -1,14 +1,14 @@
 <?php
 
-namespace nikolapopovic\angiechat\services;
+namespace Dz0nika\AngieChatCraft\services;
 
 use Craft;
 use craft\base\Component;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Exception\RequestException;
-use nikolapopovic\angiechat\AngieChat;
-use nikolapopovic\angiechat\models\Settings;
+use Dz0nika\AngieChatCraft\AngieChat;
+use Dz0nika\AngieChatCraft\models\Settings;
 
 /**
  * API Service - Handles all HTTP communication with the Laravel backend.
