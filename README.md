@@ -119,7 +119,7 @@ If you disable auto-injection, add the widget manually in your template:
 
 ## Support
 
-- Documentation: [docs.angiechat.com](https://app.angiechat.com/documentation)
+- Documentation: [angiechat.com](https://angiechat.com/documentation)
 - Email: support@angiechat.com
 - Dashboard: [app.angiechat.com](https://app.angiechat.com)
 
