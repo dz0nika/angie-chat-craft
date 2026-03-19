@@ -71,6 +71,14 @@ class ApiService extends Component
     }
 
     /**
+     * Notify the backend that an order has been placed (marks the cart as recovered).
+     */
+    public function orderPlaced(array $payload): array
+    {
+        return $this->post('order-placed', $payload);
+    }
+
+    /**
      * Check connection status with the backend.
      */
     public function checkStatus(): array

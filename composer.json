@@ -16,11 +16,11 @@
     "authors": [
         {
             "name": "Nikola Popovic",
-            "email": "hello@angiechat.com"
+            "email": "nikola@angiechat.com"
         }
     ],
     "support": {
-        "email": "support@angiechat.com",
+        "email": "nikola@angiechat.com",
         "docs": "https://docs.angiechat.com/craft-plugin"
     },
     "require": {

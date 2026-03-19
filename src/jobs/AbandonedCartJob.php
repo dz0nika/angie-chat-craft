@@ -142,11 +142,24 @@ class AbandonedCartJob extends BaseJob
             $abandonedAt = $dateSource->format('c');
         }
 
+        // Build cart URL (direct link back to the cart)
+        $cartUrl = null;
+        try {
+            if (method_exists($order, 'getNumber') || isset($order->number)) {
+                $number = method_exists($order, 'getNumber') ? $order->getNumber() : $order->number;
+                $siteUrl = \Craft::$app->getSites()->getCurrentSite()->baseUrl ?? '';
+                $cartUrl = rtrim($siteUrl, '/') . '/shop/cart?number=' . $number;
+            }
+        } catch (\Exception $e) {
+            // Ignore cart URL errors
+        }
+
         return [
-            'cart_id' => (string) ($order->id ?? 'unknown'),
-            'email' => $this->email,
-            'cart_value' => (float) ($order->total ?? $order->itemTotal ?? 0),
-            'items' => $items,
+            'cart_id'      => (string) ($order->id ?? 'unknown'),
+            'email'        => $this->email,
+            'cart_value'   => (float) ($order->total ?? $order->itemTotal ?? 0),
+            'cart_url'     => $cartUrl,
+            'items'        => $items,
             'abandoned_at' => $abandonedAt ?? (new \DateTime())->format('c'),
         ];
     }

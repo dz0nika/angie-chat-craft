@@ -14,6 +14,7 @@ use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use craft\web\View;
 use Dz0nika\AngieChatCraft\jobs\LogJob;
+use Dz0nika\AngieChatCraft\jobs\OrderPlacedJob;
 use Dz0nika\AngieChatCraft\jobs\SyncElementJob;
 use Dz0nika\AngieChatCraft\models\Settings;
 use Dz0nika\AngieChatCraft\services\ApiService;
@@ -118,7 +119,8 @@ class AngieChat extends Plugin
 
         $this->registerEntryEvents();
         $this->registerWidgetInjection();
-        // Note: abandoned cart recovery is handled via the console command:
+        $this->registerCommerceEvents();
+        // Note: abandoned cart detection is handled via the console command:
         //   php craft angie-chat/carts/check-abandoned
         // Schedule it with cron – see README for details.
     }
@@ -225,6 +227,61 @@ class AngieChat extends Plugin
             Craft::info("Angie Chat: Queued {$action} for entry #{$entry->id}", __METHOD__);
         } catch (\Exception $e) {
             Craft::error("Angie Chat: Failed to queue {$action} for entry #{$entry->id}: " . $e->getMessage(), __METHOD__);
+        }
+    }
+
+    /**
+     * Register Craft Commerce event listeners for order completion.
+     * When an order is paid/completed, we notify the backend so it can mark
+     * the corresponding AbandonedCart record as recovered.
+     */
+    private function registerCommerceEvents(): void
+    {
+        // Only register if Commerce is installed
+        if (! Craft::$app->getPlugins()->isPluginInstalled('commerce')
+            || ! Craft::$app->getPlugins()->isPluginEnabled('commerce')) {
+            return;
+        }
+
+        $orderClass = 'craft\\commerce\\elements\\Order';
+        if (! class_exists($orderClass)) {
+            return;
+        }
+
+        // Craft Commerce 4/5: EVENT_AFTER_ORDER_AUTHORIZED fires when payment is authorised.
+        // Fall back to EVENT_AFTER_COMPLETE_ORDER for older versions.
+        $events = ['EVENT_AFTER_ORDER_AUTHORIZED', 'EVENT_AFTER_COMPLETE_ORDER'];
+
+        foreach ($events as $eventConst) {
+            if (! defined("{$orderClass}::{$eventConst}")) {
+                continue;
+            }
+
+            Event::on(
+                $orderClass,
+                constant("{$orderClass}::{$eventConst}"),
+                function (Event $event) {
+                    /** @var \craft\commerce\elements\Order $order */
+                    $order = $event->sender;
+
+                    try {
+                        $number = method_exists($order, 'getNumber') ? $order->getNumber() : ($order->number ?? null);
+
+                        Craft::$app->getQueue()->push(new OrderPlacedJob([
+                            'orderId'     => (int) $order->id,
+                            'orderNumber' => $number,
+                        ]));
+                    } catch (\Exception $e) {
+                        Craft::warning(
+                            'Angie Chat: Failed to queue OrderPlacedJob: ' . $e->getMessage(),
+                            __METHOD__
+                        );
+                    }
+                }
+            );
+
+            // Only register one event constant (prefer the more specific one)
+            break;
         }
     }
 
