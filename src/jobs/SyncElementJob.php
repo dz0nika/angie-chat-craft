@@ -43,6 +43,17 @@ class SyncElementJob extends BaseJob
             return;
         }
 
+        // Skip the API round-trip entirely when the website is over its
+        // monthly quota. The backend would 429 the upsert too, but draining
+        // the queue locally lets the customer's workers free up faster.
+        if (AngieChat::$plugin->getUsage()->isBlocked()) {
+            Craft::info(
+                "Angie Chat: Skipping sync of entry #{$this->entryId} — usage limit reached",
+                __METHOD__
+            );
+            return;
+        }
+
         try {
             $apiService = AngieChat::$plugin->getApi();
 

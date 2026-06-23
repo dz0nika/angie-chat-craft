@@ -91,6 +91,7 @@ class ApiService extends Component
                 'message'          => 'Connected to Angie Chat',
                 'data'             => $response,
                 'enabled_features' => $response['enabled_features'] ?? [],
+                'usage'            => $response['usage'] ?? null,
             ];
         } catch (\Exception $e) {
             return [
@@ -98,8 +99,21 @@ class ApiService extends Component
                 'message'          => $e->getMessage(),
                 'data'             => null,
                 'enabled_features' => [],
+                'usage'            => null,
             ];
         }
+    }
+
+    /**
+     * Fetch the current usage snapshot for this license.
+     *
+     * Returns the raw decoded JSON body from /api/v1/craft/usage-status. The
+     * UsageService wraps this with caching + fail-open semantics; this method
+     * is intentionally thin and stateless.
+     */
+    public function getUsageStatus(): array
+    {
+        return $this->get('usage-status');
     }
 
     /**
@@ -139,17 +153,25 @@ class ApiService extends Component
     }
 
     /**
-     * Make a POST request to the API.
+     * Make a POST request to the API. Body is HMAC-signed with the
+     * per-tenant webhook secret so the backend can verify provenance.
      */
     private function post(string $endpoint, array $data): array
     {
         $settings = $this->getSettings();
         $url = $settings->getApiUrl($endpoint);
+        // Pre-encode so the exact bytes we sign are the exact bytes Guzzle
+        // sends. Encoding twice (once for signing, once for transport) is a
+        // classic signature-mismatch footgun.
+        $body = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         try {
             $response = $this->client->post($url, [
-                'headers' => $this->getAuthHeaders(),
-                'json' => $data,
+                'headers' => array_merge(
+                    $this->getAuthHeaders(),
+                    $this->signRequestHeaders($body),
+                ),
+                'body' => $body,
             ]);
 
             return $this->handleResponse($response, $endpoint);
@@ -163,7 +185,8 @@ class ApiService extends Component
     }
 
     /**
-     * Make a GET request to the API.
+     * Make a GET request to the API. Also signed (over empty body) so
+     * usage-status polls can't be forged from a stolen license key alone.
      */
     private function get(string $endpoint): array
     {
@@ -172,7 +195,10 @@ class ApiService extends Component
 
         try {
             $response = $this->client->get($url, [
-                'headers' => $this->getAuthHeaders(),
+                'headers' => array_merge(
+                    $this->getAuthHeaders(),
+                    $this->signRequestHeaders(''),
+                ),
             ]);
 
             return $this->handleResponse($response, $endpoint);
@@ -186,7 +212,8 @@ class ApiService extends Component
     }
 
     /**
-     * Get authentication headers.
+     * Bearer credential headers — license key still goes in X-Craft-License
+     * (backend hashes it for the lookup; column is encrypted at rest).
      */
     private function getAuthHeaders(): array
     {
@@ -194,6 +221,40 @@ class ApiService extends Component
 
         return [
             'X-Craft-License' => $settings->licenseKey,
+        ];
+    }
+
+    /**
+     * HMAC-SHA256 signature over "{unix_timestamp}.{raw_body}" using the
+     * webhook secret. Matches App\Models\Website::verifyWebhookSignature on
+     * the backend exactly — change either side and the other must change.
+     *
+     * If the webhook secret is empty (un-migrated install, grace period)
+     * we emit no signature headers. The backend logs the unsigned call and
+     * accepts it until require_webhook_signature flips to true.
+     *
+     * @return array<string, string>
+     */
+    private function signRequestHeaders(string $body): array
+    {
+        $settings = $this->getSettings();
+
+        if (empty($settings->webhookSecret)) {
+            Craft::warning(
+                'Angie Chat: webhook secret not configured — request will be sent unsigned. '
+                . 'Add the webhook secret from your dashboard to enable HMAC verification.',
+                __METHOD__
+            );
+
+            return [];
+        }
+
+        $timestamp = (string) time();
+        $signature = hash_hmac('sha256', $timestamp . '.' . $body, $settings->webhookSecret);
+
+        return [
+            'X-Angie-Timestamp' => $timestamp,
+            'X-Angie-Signature' => 'sha256=' . $signature,
         ];
     }
 

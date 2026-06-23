@@ -31,10 +31,24 @@ class WidgetService extends Component
                 return '';
             }
 
+            // Emit the BROWSER-SAFE widget public key, NOT the secret
+            // license key. The widget key is domain-locked server-side so
+            // a scraper copying it gets nothing useful — they'd still hit
+            // the registered domain check. The secret license key NEVER
+            // leaves the server (used only for outbound webhooks).
+            //
+            // For un-migrated installs (no widgetPublicKey set yet) we fall
+            // back to the legacy data-license so the customer's site keeps
+            // working until they paste the new key. Backend rate-limits
+            // and logs unsigned widget origins identically.
+            $widgetCredential = ! empty($settings->widgetPublicKey)
+                ? $settings->widgetPublicKey
+                : $settings->licenseKey;
+
             $attributes = [
-                'src'          => $settings->widgetUrl,
-                'data-license' => $settings->licenseKey,
-                'async'        => true,
+                'src'             => $settings->widgetUrl,
+                'data-widget-key' => $widgetCredential,
+                'async'           => true,
             ];
 
             // Pass exclude selectors to the widget JS for client-side evaluation.
@@ -46,6 +60,11 @@ class WidgetService extends Component
 
             if ($settings->isTestMode()) {
                 $attributes['data-test-mode'] = 'true';
+            }
+
+            $defaultApi = 'https://app.angiechat.com';
+            if ($settings->apiEndpoint !== '' && rtrim($settings->apiEndpoint, '/') !== $defaultApi) {
+                $attributes['data-api'] = rtrim($settings->apiEndpoint, '/');
             }
 
             $attributeString = $this->buildAttributeString($attributes);
@@ -93,6 +112,18 @@ class WidgetService extends Component
             }
 
             if ($this->isExcludedByUrl()) {
+                return false;
+            }
+
+            // Usage gate: don't inject the widget if the backend has signalled
+            // we're over quota. Fails open if the backend is unreachable so a
+            // SaaS outage never takes down the customer's frontend.
+            //
+            // The backend would also 429 the chat call itself, so even if a
+            // visitor somehow already has the widget loaded from a cached
+            // page, sending a message is still blocked server-side. This is
+            // the preventative layer.
+            if (AngieChat::$plugin && ! AngieChat::$plugin->getUsage()->shouldAllowWidget()) {
                 return false;
             }
 

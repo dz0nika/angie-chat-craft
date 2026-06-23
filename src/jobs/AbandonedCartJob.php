@@ -40,6 +40,19 @@ class AbandonedCartJob extends BaseJob
             return;
         }
 
+        // Cart recovery emails are LLM-drafted server-side. If the website
+        // is over its monthly token budget, don't even forward the cart —
+        // the backend would 429 the webhook anyway, but bailing here saves
+        // the customer's queue worker the trouble.
+        if (AngieChat::$plugin->getUsage()->isBlocked()) {
+            Craft::info(
+                "Angie Chat: Skipping abandoned cart #{$this->orderId} — usage limit reached",
+                __METHOD__
+            );
+
+            return;
+        }
+
         $order = $this->getOrder();
 
         if (! $order) {

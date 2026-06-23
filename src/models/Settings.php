@@ -13,10 +13,32 @@ use craft\base\Model;
 class Settings extends Model
 {
     /**
-     * The license key from the Angie Chat dashboard.
-     * Format: sk_craft_live_... or sk_craft_test_...
+     * The license key from the Angie Chat dashboard. Server-only secret —
+     * NEVER emitted in HTML or sent to the browser. Sent as X-Craft-License
+     * header on outbound webhooks to the backend.
+     *
+     * Format: sk_angie_live_... or sk_angie_test_...
      */
     public string $licenseKey = '';
+
+    /**
+     * Browser-safe widget public key from the Angie Chat dashboard. THIS is
+     * what gets embedded in the page as data-widget-key="pk_widget_..." and
+     * is domain-locked server-side so possession alone grants no write access.
+     */
+    public string $widgetPublicKey = '';
+
+    /**
+     * Per-tenant HMAC secret from the Angie Chat dashboard. Used by
+     * ApiService to sign every outbound webhook body so the backend can
+     * verify the call really came from this specific Craft install (not a
+     * scraped license key being replayed).
+     *
+     * Stored encrypted in the Craft control panel using Craft's secret
+     * Twig env reference whenever possible — see settings.twig for the
+     * field type. Format: whk_... + 48 random chars.
+     */
+    public string $webhookSecret = '';
 
     /**
      * Array of section handles that should be synced to the AI.
@@ -34,6 +56,13 @@ class Settings extends Model
      * Can be overridden for testing/staging environments.
      */
     public string $apiEndpoint = 'https://app.angiechat.com';
+
+    /**
+     * Server-side API URL for Craft → Laravel calls (webhooks, usage, sync).
+     * In Docker, set this to http://host.docker.internal:8080 while keeping
+     * apiEndpoint as http://localhost:8080 for the browser widget.
+     */
+    public string $serverApiEndpoint = '';
 
     /**
      * The CDN URL for the widget JavaScript.
@@ -54,8 +83,8 @@ class Settings extends Model
     public function defineRules(): array
     {
         return [
-            [['licenseKey'], 'string', 'max' => 100],
-            [['apiEndpoint', 'widgetUrl'], 'url'],
+            [['licenseKey', 'widgetPublicKey', 'webhookSecret'], 'string', 'max' => 200],
+            [['apiEndpoint', 'serverApiEndpoint', 'widgetUrl'], 'url'],
             [['enabledSections'], 'each', 'rule' => ['string']],
             [['enableAbandonedCart', 'autoInjectWidget'], 'boolean'],
             [['excludeSelectors'], 'string', 'max' => 500],
@@ -64,10 +93,27 @@ class Settings extends Model
 
     /**
      * Check if the plugin is properly configured.
+     *
+     * The widget public key is required for the chat widget to render;
+     * the webhook secret is checked separately by isFullyConfigured() so
+     * existing installs can keep syncing during the grace period.
      */
     public function isConfigured(): bool
     {
-        return ! empty($this->licenseKey) && ! empty($this->enabledSections);
+        return ! empty($this->licenseKey)
+            && ! empty($this->widgetPublicKey)
+            && ! empty($this->enabledSections);
+    }
+
+    /**
+     * True only when all three credentials (license, widget key, webhook
+     * secret) are present. ApiService::post will warn (not fail) if the
+     * webhook secret is missing so existing installs aren't broken by the
+     * upgrade — backend has a matching grace period.
+     */
+    public function isFullyConfigured(): bool
+    {
+        return $this->isConfigured() && ! empty($this->webhookSecret);
     }
 
     /**
@@ -83,7 +129,7 @@ class Settings extends Model
      */
     public function getApiUrl(string $endpoint): string
     {
-        $baseUrl = rtrim($this->apiEndpoint, '/');
+        $baseUrl = rtrim($this->serverApiEndpoint !== '' ? $this->serverApiEndpoint : $this->apiEndpoint, '/');
 
         return $baseUrl . '/api/v1/craft/' . ltrim($endpoint, '/');
     }

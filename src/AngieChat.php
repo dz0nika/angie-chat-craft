@@ -19,6 +19,7 @@ use Dz0nika\AngieChatCraft\jobs\SyncElementJob;
 use Dz0nika\AngieChatCraft\models\Settings;
 use Dz0nika\AngieChatCraft\services\ApiService;
 use Dz0nika\AngieChatCraft\services\PayloadBuilder;
+use Dz0nika\AngieChatCraft\services\UsageService;
 use Dz0nika\AngieChatCraft\services\WidgetService;
 use Dz0nika\AngieChatCraft\variables\AngieChatVariable;
 use yii\base\Event;
@@ -92,6 +93,7 @@ class AngieChat extends Plugin
             'api' => ApiService::class,
             'payload' => PayloadBuilder::class,
             'widget' => WidgetService::class,
+            'usage' => UsageService::class,
         ]);
 
         // Register Twig variable
@@ -359,6 +361,11 @@ class AngieChat extends Plugin
     public function getWidget(): WidgetService
     {
         return $this->widget;
+    }
+
+    public function getUsage(): UsageService
+    {
+        return $this->usage;
     }
 
     /**

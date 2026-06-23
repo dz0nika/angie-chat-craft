@@ -1,5 +1,6 @@
 {
     "name": "dz0nika/angie-chat-craft",
+    "version": "1.0.8-dev",
     "description": "Craft CMS AI-powered chat widget and data sync connector for Angie Chat SaaS",
     "type": "craft-plugin",
     "license": "MIT",
@@ -20,7 +21,7 @@
         }
     ],
     "support": {
-        "email": "nikola@angiechat.com",
+        "email": "info@angiechat.com",
         "docs": "https://docs.angiechat.com/craft-plugin"
     },
     "require": {
