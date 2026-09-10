@@ -46,7 +46,7 @@ class WidgetService extends Component
                 : $settings->licenseKey;
 
             $attributes = [
-                'src'             => $settings->widgetUrl,
+                'src'             => $this->versionedWidgetUrl($settings->widgetUrl),
                 'data-widget-key' => $widgetCredential,
                 'async'           => true,
             ];
@@ -227,5 +227,15 @@ class WidgetService extends Component
         }
 
         return AngieChat::$plugin->getSettings();
+    }
+    /**
+     * Append ?v=<plugin version> so a plugin upgrade bypasses the CDN's 24 h
+     * cache and loads the widget build that matches it.
+     */
+    private function versionedWidgetUrl(string $url): string
+    {
+        $version = AngieChat::$plugin?->getVersion() ?: '0';
+
+        return $url . (str_contains($url, '?') ? '&' : '?') . 'v=' . rawurlencode($version);
     }
 }

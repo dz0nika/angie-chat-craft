@@ -6,6 +6,7 @@ use Craft;
 use craft\queue\BaseJob;
 use Dz0nika\AngieChatCraft\AngieChat;
 use Dz0nika\AngieChatCraft\jobs\LogJob;
+use Dz0nika\AngieChatCraft\services\CartSnapshotService;
 
 /**
  * Abandoned Cart Job - Sends cart data to Laravel for recovery emails.
@@ -160,8 +161,7 @@ class AbandonedCartJob extends BaseJob
         try {
             if (method_exists($order, 'getNumber') || isset($order->number)) {
                 $number = method_exists($order, 'getNumber') ? $order->getNumber() : $order->number;
-                $siteUrl = \Craft::$app->getSites()->getCurrentSite()->baseUrl ?? '';
-                $cartUrl = rtrim($siteUrl, '/') . '/shop/cart?number=' . $number;
+                $cartUrl = CartSnapshotService::cartLoadUrl((string) $number);
             }
         } catch (\Exception $e) {
             // Ignore cart URL errors

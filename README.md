@@ -4,9 +4,10 @@ AI-powered customer service chat widget for Craft CMS 5. This plugin connects yo
 
 ## Requirements
 
-- Craft CMS 5.0 or later
+- Craft CMS 5.0 or later (Craft **Pro** edition if you use cart recovery — Craft Commerce requires it)
 - PHP 8.2 or later
 - An active [Angie Chat](https://angiechat.com) subscription
+- Cart recovery additionally needs Craft Commerce 4/5 and the *Abandoned Cart Recovery* add-on
 
 ## Installation
 
@@ -26,7 +27,8 @@ Search for "Angie Chat" in the Craft Plugin Store and click Install.
 1. **Get Your License Key**
    - Log in to your [Angie Chat Dashboard](https://app.angiechat.com)
    - Navigate to **Websites** → Select your website → **Settings**
-   - Copy your **Craft License Key**
+   - Copy your **Craft License Key**, **Widget Public Key** and **Webhook Secret**
+     (the secret is shown once when generated — rotate it in the dashboard if lost)
 
 2. **Configure the Plugin**
    - In Craft, go to **Settings** → **Plugins** → **Angie Chat**
@@ -58,14 +60,25 @@ The plugin automatically injects the Angie Chat widget on your frontend pages. T
 - Uses your custom styling from the Angie Chat dashboard
 - Maintains conversation context across page navigation
 
-### Abandoned Cart Recovery (Craft Commerce)
+### Cart Recovery (Craft Commerce)
 
-If you have Craft Commerce installed and the Growth Tier subscription:
+Requires Craft Commerce and the *Abandoned Cart Recovery* add-on. Three layers, all
+driven by the shopper's real Commerce cart:
 
-1. Enable "Abandoned Cart Recovery" in plugin settings
-2. Add a cron job to check for abandoned carts (see [Abandoned Cart Setup](#abandoned-cart-setup))
-3. When a cart is detected as abandoned, the plugin sends cart data to Angie Chat
-4. The AI generates a personalized recovery email
+1. **Exit-intent rescue** — the plugin injects the live cart (prices, discounts,
+   totals) into every page; when a shopper with a non-empty cart moves to leave, the
+   widget opens and tells them what they'd lose. Toggle and message: dashboard →
+   Websites → Cart Recovery. Nothing to configure in Craft.
+2. **Recovery emails** — enable "Abandoned Cart Recovery" in the plugin settings and
+   add the cron job (see [Abandoned Cart Setup](src/docs/abandoned-cart.md)). Abandoned
+   carts with an email get an AI-written recovery email and a 24 h follow-up. The
+   "complete your order" link uses Commerce's `commerce/cart/load-cart` action, so it
+   works from any device; set `loadCartRedirectUrl` in `config/commerce.php` to your
+   cart page so shoppers land there.
+3. **Webhooks to your own system** — instead of (or as well as) our emails, receive
+   signed `cart.exit_intent` / `cart.abandoned` events at your URL and run your own
+   workflow. Set up in the dashboard; spec at
+   [docs/cart-webhooks](https://docs.angiechat.com/cart-webhooks).
 
 ---
 

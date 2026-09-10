@@ -18,6 +18,7 @@ use Dz0nika\AngieChatCraft\jobs\OrderPlacedJob;
 use Dz0nika\AngieChatCraft\jobs\SyncElementJob;
 use Dz0nika\AngieChatCraft\models\Settings;
 use Dz0nika\AngieChatCraft\services\ApiService;
+use Dz0nika\AngieChatCraft\services\CartSnapshotService;
 use Dz0nika\AngieChatCraft\services\PayloadBuilder;
 use Dz0nika\AngieChatCraft\services\UsageService;
 use Dz0nika\AngieChatCraft\services\WidgetService;
@@ -94,6 +95,7 @@ class AngieChat extends Plugin
             'payload' => PayloadBuilder::class,
             'widget' => WidgetService::class,
             'usage' => UsageService::class,
+            'cartSnapshot' => CartSnapshotService::class,
         ]);
 
         // Register Twig variable
@@ -190,7 +192,13 @@ class AngieChat extends Plugin
                 try {
                     /** @var WidgetService $widgetService */
                     $widgetService = $this->widget;
-                    echo $widgetService->renderWidgetScript();
+                    $script = $widgetService->renderWidgetScript();
+                    if ($script !== '') {
+                        // Cart JSON first so it is in the DOM before the
+                        // widget script (async) can possibly execute.
+                        echo $this->cartSnapshot->render();
+                    }
+                    echo $script;
                 } catch (\Exception $e) {
                     // Silently fail - never crash the client's frontend
                     Craft::warning('Angie Chat: Failed to render widget: ' . $e->getMessage(), __METHOD__);

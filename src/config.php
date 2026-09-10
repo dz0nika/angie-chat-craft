@@ -17,6 +17,7 @@ return [
     // Enable abandoned cart tracking (requires Craft Commerce)
     'enableAbandonedCart' => false,
 
+
     // API endpoint (override for testing/staging)
     'apiEndpoint' => 'https://app.angiechat.com',
 

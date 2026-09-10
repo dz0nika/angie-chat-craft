@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] - 2026-09-10
+
+### Added
+- **Cart snapshot for the widget**: the shopper's live Commerce cart (items, unit and sale prices, per-item discounts, subtotal, discount total, total, cart URL) is injected into every page as `<script type="application/json" id="angie-cart">`. The widget uses it for exit-intent rescue ("leave now and you'll lose $X in discounts") and the assistant can answer questions about the cart. Requires Craft Commerce; silently absent otherwise.
+- **Return-to-cart links** now use Commerce's `commerce/cart/load-cart` action, so a recovery email opened on another device restores the cart; set `loadCartRedirectUrl` in `config/commerce.php` to your cart page.
+- **Versioned widget URL**: `?v=<plugin version>` is appended to the widget script tag so upgrades bypass the CDN's 24 h cache.
+
+### Fixed
+- Abandoned-cart cron: the cart link no longer assumes the cart page lives at `/shop/cart`.
+
+## [1.0.8] - 2026-06-23
+
+### Changed
+- Better usage tracking, interface image rendering fixes, RAG service optimisations.
+
 ## [1.0.7] - 2026-03-19
 
 ### Added
