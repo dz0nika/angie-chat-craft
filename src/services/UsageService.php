@@ -118,8 +118,18 @@ class UsageService extends Component
      */
     public function shouldAllowWidget(): bool
     {
-        // Fail open — only block when we KNOW the customer is over quota.
-        return ! $this->isBlocked();
+        // Runs on every storefront page, so it must never wait on the network:
+        // a slow or unreachable backend would stall every page (10-30 s
+        // timeouts). Read only the cached status, which queue jobs refresh,
+        // and fail open: block only when we KNOW the customer is over quota.
+        $settings = $this->getSettings();
+        if (! $settings || empty($settings->licenseKey)) {
+            return true;
+        }
+
+        $cached = Craft::$app->getCache()->get('angie_chat_usage_' . md5($settings->licenseKey));
+
+        return ($cached['status'] ?? self::STATUS_UNKNOWN) !== self::STATUS_BLOCKED;
     }
 
     /**

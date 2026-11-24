@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-11-24
+
+### Fixed
+- **Storefront pages no longer wait on the Angie Chat API.** The widget's quota check now reads only the cached usage status (refreshed by queue jobs). Before, an unreachable or slow backend made every page wait for the API timeout (measured: 10 s per page view).
+
 ## [1.1.0] - 2026-11-24
 
 ### Added
