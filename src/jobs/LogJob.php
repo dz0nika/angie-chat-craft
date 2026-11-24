@@ -44,18 +44,22 @@ class LogJob extends BaseJob
 
             $url = rtrim($settings->apiEndpoint, '/') . '/api/v1/craft/log';
 
+            // Signed like every other plugin call: sites that require webhook
+            // signatures reject unsigned log posts with 401.
+            $body = json_encode([
+                'level'   => $this->level,
+                'message' => $this->message,
+                'context' => empty($this->context) ? null : $this->context,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
             $client->post($url, [
-                'headers' => [
+                'headers' => array_merge([
                     'X-Craft-License' => $settings->licenseKey,
                     'Content-Type'    => 'application/json',
                     'Accept'          => 'application/json',
                     'User-Agent'      => 'AngieChatCraft/1.0',
-                ],
-                'json' => [
-                    'level'   => $this->level,
-                    'message' => $this->message,
-                    'context' => empty($this->context) ? null : $this->context,
-                ],
+                ], AngieChat::$plugin->getApi()->signRequestHeaders($body)),
+                'body' => $body,
             ]);
             // Response is intentionally ignored – fire and forget
         } catch (\Throwable $e) {

@@ -235,7 +235,7 @@ class ApiService extends Component
      *
      * @return array<string, string>
      */
-    private function signRequestHeaders(string $body): array
+    public function signRequestHeaders(string $body): array
     {
         $settings = $this->getSettings();
 
@@ -267,9 +267,13 @@ class ApiService extends Component
         $body = json_decode($response->getBody()->getContents(), true) ?? [];
 
         if ($statusCode === 401) {
-            Craft::error('Angie Chat: Invalid or expired license key', __METHOD__);
+            // The backend says *why* (bad key vs. missing/invalid webhook
+            // signature) — surface that instead of a generic "invalid key".
+            $message = $body['message'] ?? 'Invalid or expired license key. Please check your Angie Chat dashboard.';
+            Craft::error("Angie Chat: unauthorized ({$endpoint}): {$message}", __METHOD__);
 
-            throw new \RuntimeException('Invalid or expired license key. Please check your Angie Chat dashboard.');
+            // "Unauthorized:" keeps SyncElementJob::isRetryable() treating it as final.
+            throw new \RuntimeException("Unauthorized: {$message}");
         }
 
         if ($statusCode === 403) {
