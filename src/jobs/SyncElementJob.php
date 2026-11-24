@@ -3,6 +3,7 @@
 namespace Dz0nika\AngieChatCraft\jobs;
 
 use Craft;
+use craft\commerce\elements\Product;
 use craft\elements\Entry;
 use craft\queue\BaseJob;
 use Dz0nika\AngieChatCraft\AngieChat;
@@ -36,6 +37,9 @@ class SyncElementJob extends BaseJob
     /** 'upsert' or 'delete' */
     public string $action = 'upsert';
 
+    /** 'entry' or 'product' (Craft Commerce). Defaults keep already-queued jobs valid. */
+    public string $elementType = 'entry';
+
     public function execute($queue): void
     {
         if (! AngieChat::$plugin) {
@@ -57,7 +61,20 @@ class SyncElementJob extends BaseJob
         try {
             $apiService = AngieChat::$plugin->getApi();
 
-            if ($this->action === 'delete') {
+            // Re-load inside the job so payload building is fully async
+            $elementClass = $this->elementType === 'product' ? Product::class : Entry::class;
+            $entry = $this->action === 'delete' ? null : $elementClass::find()
+                ->id($this->entryId)
+                ->siteId($this->siteId)
+                ->status(null)
+                ->one();
+
+            // A disabled, expired or not-yet-live product must not be offered by the AI.
+            // (Products are primary-site only; entries keep re-indexing as before
+            // because per-site saves of a multi-site entry would race here.)
+            $productNotLive = $entry instanceof Product && $entry->getStatus() !== 'live';
+
+            if ($this->action === 'delete' || $productNotLive) {
                 $apiService->delete([
                     'entry_id'  => $this->entryId,
                     'entry_uid' => $this->entryUid,
@@ -72,13 +89,6 @@ class SyncElementJob extends BaseJob
                 return;
             }
 
-            // Re-load entry inside the job so payload building is fully async
-            $entry = Entry::find()
-                ->id($this->entryId)
-                ->siteId($this->siteId)
-                ->status(null)
-                ->one();
-
             if (! $entry) {
                 // Entry deleted between event and job execution – silently skip
                 Craft::info(
@@ -88,7 +98,9 @@ class SyncElementJob extends BaseJob
                 return;
             }
 
-            $payload           = AngieChat::$plugin->getPayload()->buildFromEntry($entry);
+            $payload = $entry instanceof Entry
+                ? AngieChat::$plugin->getPayload()->buildFromEntry($entry)
+                : AngieChat::$plugin->getPayload()->buildFromProduct($entry);
             $payload['action'] = 'upsert';
 
             $apiService->upsert($payload);

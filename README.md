@@ -34,6 +34,7 @@ Search for "Angie Chat" in the Craft Plugin Store and click Install.
    - In Craft, go to **Settings** → **Plugins** → **Angie Chat**
    - Paste your license key
    - Select which sections should be synced to the AI
+   - On Craft Commerce sites, select which product types should be synced
 
 3. **Initial Sync**
    - Click **Force Sync All Data** to send existing content to the AI
@@ -51,6 +52,16 @@ When you save an entry in an enabled section, the plugin:
 4. Queues a background job to send data to Angie Chat
 
 The sync happens asynchronously via Craft's queue, so your Control Panel stays fast.
+
+Commerce products in the selected product types sync the same way, with one line per
+variant (name, SKU, price, sale price, stock status). Changes that don't re-save a product
+are picked up automatically, with no cron needed:
+
+- an order sells out a variant → that product is re-synced right away;
+- stock is edited by hand (Commerce → Inventory, imports) → that product is re-synced right away;
+- a catalog pricing rule or sale starts, ends, is edited or deleted, or a product reaches
+  its post/expiry date → affected products are re-synced within 5 minutes (checked on
+  normal site traffic, at most once per 5 minutes).
 
 ### Chat Widget
 

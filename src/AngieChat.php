@@ -6,7 +6,13 @@ use Craft;
 use craft\base\Element;
 use craft\base\Model;
 use craft\base\Plugin;
+use craft\commerce\elements\Order;
+use craft\commerce\elements\Product;
+use craft\commerce\elements\Variant;
 use craft\console\Application as ConsoleApplication;
+use craft\db\Query;
+use craft\elements\db\ElementQuery;
+use craft\helpers\Db;
 use craft\elements\Entry;
 use craft\events\ModelEvent;
 use craft\events\RegisterUrlRulesEvent;
@@ -83,6 +89,7 @@ class AngieChat extends Plugin
             'plugin'          => $this,
             'settings'        => $this->getSettings(),
             'sections'        => $this->getAvailableSections(),
+            'productTypes'    => $this->getAvailableProductTypes(),
             'syncStatus'      => $syncStatus,
             'enabledFeatures' => $enabledFeatures,
         ]);
@@ -122,6 +129,7 @@ class AngieChat extends Plugin
         }
 
         $this->registerEntryEvents();
+        $this->registerProductEvents();
         $this->registerWidgetInjection();
         $this->registerCommerceEvents();
         // Note: abandoned cart detection is handled via the console command:
@@ -207,6 +215,209 @@ class AngieChat extends Plugin
         );
     }
 
+    private function registerProductEvents(): void
+    {
+        $types = $this->getSettings()->enabledProductTypes ?? [];
+
+        if ($types === [] || ! $this->commerceEnabled()) {
+            return;
+        }
+
+        Event::on(Product::class, Element::EVENT_AFTER_SAVE, function (ModelEvent $event) use ($types) {
+            $product = $event->sender;
+
+            // Saves propagate to every site and the backend keeps one record per
+            // product, so only the primary-site save is sent.
+            if ($product->siteId === Craft::$app->getSites()->getPrimarySite()->id
+                && $this->shouldSyncProduct($product, $types)) {
+                $this->dispatchSyncJob($product, 'upsert');
+            }
+        });
+
+        Event::on(Product::class, Element::EVENT_AFTER_DELETE, function (Event $event) use ($types) {
+            if ($this->shouldSyncProduct($event->sender, $types)) {
+                $this->dispatchSyncJob($event->sender, 'delete');
+            }
+        });
+
+        // Selling out does not re-save the product, so refresh products whose
+        // purchased variant just ran out. Commerce updates inventory before
+        // this event fires (Order::afterOrderComplete).
+        Event::on(Order::class, Order::EVENT_AFTER_COMPLETE_ORDER, function (Event $event) use ($types) {
+            try {
+                $soldOut = [];
+
+                foreach ($event->sender->getLineItems() as $lineItem) {
+                    // Fresh load: the line item's purchasable caches pre-order stock.
+                    $variant = Variant::find()
+                        ->id($lineItem->purchasableId)
+                        ->siteId(Craft::$app->getSites()->getPrimarySite()->id)
+                        ->status(null)
+                        ->one();
+                    $product = $variant?->getOwner();
+
+                    if ($product && ! $variant->hasStock() && $this->shouldSyncProduct($product, $types)) {
+                        $soldOut[$product->id] = $product;
+                    }
+                }
+
+                foreach ($soldOut as $product) {
+                    $this->dispatchSyncJob($product, 'upsert');
+                }
+            } catch (\Throwable $e) {
+                Craft::warning('Angie Chat: Sold-out refresh failed: ' . $e->getMessage(), __METHOD__);
+            }
+        });
+
+        // Manual stock edits (Commerce → Inventory, imports) don't re-save the
+        // product either. Orders take a different path (inventory movements),
+        // so this fires only for hand edits, not on every sale.
+        Event::on(\craft\commerce\services\Inventory::class, \craft\commerce\services\Inventory::EVENT_AFTER_EXECUTE_UPDATE_INVENTORY_LEVEL, function (Event $event) use ($types) {
+            try {
+                $this->queueProductsForPurchasables($types, (new Query())
+                    ->select('purchasableId')
+                    ->from('{{%commerce_inventoryitems}}')
+                    ->where(['id' => $event->updateInventoryLevel->inventoryItemId])
+                    ->column());
+            } catch (\Throwable $e) {
+                Craft::warning('Angie Chat: Stock edit refresh failed: ' . $e->getMessage(), __METHOD__);
+            }
+        });
+
+        // Deleting a pricing rule or sale only cascades rows away; no price
+        // regeneration follows, so the schedule check below would miss it.
+        Event::on(\craft\commerce\records\CatalogPricingRule::class, \yii\db\BaseActiveRecord::EVENT_BEFORE_DELETE, function (Event $event) use ($types) {
+            try {
+                $this->queueProductsForPurchasables($types, (new Query())
+                    ->select('purchasableId')->distinct()
+                    ->from('{{%commerce_catalogpricing}}')
+                    ->where(['catalogPricingRuleId' => $event->sender->id])
+                    ->column());
+            } catch (\Throwable $e) {
+                Craft::warning('Angie Chat: Pricing rule delete refresh failed: ' . $e->getMessage(), __METHOD__);
+            }
+        });
+        Event::on(\craft\commerce\records\Sale::class, \yii\db\BaseActiveRecord::EVENT_AFTER_DELETE, function () use ($types) {
+            try {
+                $this->queueRows('product', $this->productQuery($types));
+            } catch (\Throwable $e) {
+                Craft::warning('Angie Chat: Sale delete refresh failed: ' . $e->getMessage(), __METHOD__);
+            }
+        });
+
+        // Promotions and scheduled products change on a clock, not on a save.
+        // Piggyback on normal site/CP traffic instead of asking for a cron.
+        if (! Craft::$app->getRequest()->getIsConsoleRequest()) {
+            Craft::$app->on(\yii\base\Application::EVENT_AFTER_REQUEST, function () use ($types) {
+                $this->syncScheduledProductChanges($types);
+            });
+        }
+    }
+
+    /**
+     * Re-sync products whose price or visibility changed without a save:
+     * a catalog pricing window opened/closed, catalog prices were regenerated
+     * (rule or price edited), a legacy sale changed, or a product's post/expiry
+     * date passed. Runs at most once per 5 minutes and only queues what changed.
+     */
+    public function syncScheduledProductChanges(array $types): int
+    {
+        $cache = Craft::$app->getCache();
+
+        if (! $cache->add('angie-chat:schedule-check-lock', 1, 300)) {
+            return 0;
+        }
+
+        try {
+            $now = new \DateTime();
+            $since = $cache->get('angie-chat:schedule-checked-at') ?: (clone $now)->modify('-1 hour');
+            $from = Db::prepareDateForDb($since);
+            $to = Db::prepareDateForDb($now);
+            $crossed = fn (string $col) => ['and', ['>', $col, $from], ['<=', $col, $to]];
+            $pricing = '{{%commerce_catalogpricing}}';
+            $sales = '{{%commerce_sales}}';
+
+            // Regenerated prices are deleted and re-inserted, so new row ids mark
+            // them. Ids, not dateUpdated: Commerce writes base rows with SQL NOW(),
+            // which follows the DB server's timezone instead of Craft's UTC.
+            // A full rebuild truncates the table and restarts ids (max goes down).
+            $maxId = (int) (new Query())->from($pricing)->max('id');
+            $lastMaxId = $cache->get('angie-chat:catalog-pricing-max-id');
+            $resyncAll = $lastMaxId !== false && $maxId < $lastMaxId;
+
+            $priceWindows = ['or', $crossed('dateFrom'), $crossed('dateTo')];
+            if ($lastMaxId !== false) {
+                $priceWindows[] = ['>', 'id', $lastMaxId];
+            }
+            $purchasableIds = (new Query())->select('purchasableId')->distinct()
+                ->from($pricing)->where($priceWindows)->column();
+
+            // Legacy sales can target categories, so any change re-syncs every product.
+            $resyncAll = $resyncAll || (Craft::$app->getDb()->tableExists($sales) && (new Query())
+                ->from($sales)
+                ->where(['or', $crossed('dateFrom'), $crossed('dateTo'), ['>', 'dateUpdated', $from]])
+                ->exists());
+
+            if ($resyncAll) {
+                $queued = $this->queueRows('product', $this->productQuery($types));
+            } else {
+                $queued = $this->queueProductsForPurchasables($types, $purchasableIds, $this->productQuery($types)
+                    ->andWhere(['or', $crossed('commerce_products.postDate'), $crossed('commerce_products.expiryDate')])
+                    ->ids());
+            }
+
+            $cache->set('angie-chat:schedule-checked-at', $now);
+            $cache->set('angie-chat:catalog-pricing-max-id', $maxId);
+
+            if ($queued > 0) {
+                Craft::info("Angie Chat: Re-syncing {$queued} products after price/schedule changes", __METHOD__);
+            }
+
+            return $queued;
+        } catch (\Throwable $e) {
+            Craft::warning('Angie Chat: Schedule check failed: ' . $e->getMessage(), __METHOD__);
+
+            return 0;
+        }
+    }
+
+    private function queueProductsForPurchasables(array $types, array $purchasableIds, array $productIds = []): int
+    {
+        if ($purchasableIds !== []) {
+            $productIds = array_merge($productIds, (new Query())
+                ->select('primaryOwnerId')->distinct()
+                ->from('{{%commerce_variants}}')
+                ->where(['id' => $purchasableIds])
+                ->column());
+        }
+
+        return $productIds === []
+            ? 0
+            : $this->queueRows('product', $this->productQuery($types)->id(array_unique($productIds)));
+    }
+
+    /** Enabled product types on the primary site, any status (non-live ones sync as deletes). */
+    private function productQuery(array $types): ElementQuery
+    {
+        return Product::find()
+            ->type($types)
+            ->siteId(Craft::$app->getSites()->getPrimarySite()->id)
+            ->status(null);
+    }
+
+    private function shouldSyncProduct(Element $product, array $types): bool
+    {
+        return ! $product->getIsDraft()
+            && ! $product->getIsRevision()
+            && in_array($product->getType()->handle, $types, true);
+    }
+
+    private function commerceEnabled(): bool
+    {
+        return class_exists(Product::class)
+            && Craft::$app->getPlugins()->isPluginEnabled('commerce');
+    }
+
     private function shouldSyncEntry(Entry $entry, array $enabledSections): bool
     {
         if ($entry->getIsDraft() || $entry->getIsRevision()) {
@@ -221,7 +432,7 @@ class AngieChat extends Plugin
         return in_array($section->handle, $enabledSections, true);
     }
 
-    private function dispatchSyncJob(Entry $entry, string $action): void
+    private function dispatchSyncJob(Element $entry, string $action): void
     {
         try {
             // Phase 2: pass only lightweight identifiers. All heavy payload
@@ -232,6 +443,7 @@ class AngieChat extends Plugin
                 'entryUid' => (string) $entry->uid,
                 'siteId'   => (int) $entry->siteId,
                 'action'   => $action,
+                'elementType' => $entry instanceof Entry ? 'entry' : 'product',
             ]));
 
             Craft::info("Angie Chat: Queued {$action} for entry #{$entry->id}", __METHOD__);
@@ -329,6 +541,73 @@ class AngieChat extends Plugin
         }
 
         return $sections;
+    }
+
+    public function getAvailableProductTypes(): array
+    {
+        if (! $this->commerceEnabled()) {
+            return [];
+        }
+
+        $types = [];
+
+        try {
+            foreach (\craft\commerce\Plugin::getInstance()->getProductTypes()->getAllProductTypes() as $type) {
+                $types[] = [
+                    'handle' => $type->handle,
+                    'name' => $type->name,
+                    'productCount' => Product::find()->type($type->handle)->status(null)->count(),
+                ];
+            }
+        } catch (\Exception $e) {
+            Craft::warning('Angie Chat: Failed to get product types: ' . $e->getMessage(), __METHOD__);
+        }
+
+        return $types;
+    }
+
+    /**
+     * Queue every live entry in the enabled sections and every live product in
+     * the enabled product types. Used by the CP button and the console command.
+     *
+     * @return int Number of jobs queued
+     */
+    public function queueFullSync(): int
+    {
+        $settings = $this->getSettings();
+
+        $queued = 0;
+
+        foreach ($settings->enabledSections ?? [] as $handle) {
+            $queued += $this->queueRows('entry', Entry::find()->section($handle)->status('live'));
+        }
+
+        if ($this->commerceEnabled() && ! empty($settings->enabledProductTypes)) {
+            $queued += $this->queueRows('product', $this->productQuery($settings->enabledProductTypes)->status('live'));
+        }
+
+        return $queued;
+    }
+
+    private function queueRows(string $elementType, ElementQuery $query): int
+    {
+        // Ids only: payloads are built inside SyncElementJob on the queue worker.
+        $rows = $query
+            ->select(['elements.id', 'elements.uid', 'elements_sites.siteId'])
+            ->asArray()
+            ->all();
+
+        foreach ($rows as $row) {
+            Craft::$app->getQueue()->push(new SyncElementJob([
+                'entryId'     => (int) $row['id'],
+                'entryUid'    => (string) $row['uid'],
+                'siteId'      => (int) $row['siteId'],
+                'action'      => 'upsert',
+                'elementType' => $elementType,
+            ]));
+        }
+
+        return count($rows);
     }
 
     public function getSyncStatus(): array

@@ -47,6 +47,11 @@ class Settings extends Model
     public array $enabledSections = [];
 
     /**
+     * Craft Commerce product type handles to sync (products + variant prices/stock).
+     */
+    public array $enabledProductTypes = [];
+
+    /**
      * Whether to enable abandoned cart tracking (requires Craft Commerce).
      */
     public bool $enableAbandonedCart = false;
@@ -85,7 +90,7 @@ class Settings extends Model
         return [
             [['licenseKey', 'widgetPublicKey', 'webhookSecret'], 'string', 'max' => 200],
             [['apiEndpoint', 'serverApiEndpoint', 'widgetUrl'], 'url'],
-            [['enabledSections'], 'each', 'rule' => ['string']],
+            [['enabledSections', 'enabledProductTypes'], 'each', 'rule' => ['string']],
             [['enableAbandonedCart', 'autoInjectWidget'], 'boolean'],
             [['excludeSelectors'], 'string', 'max' => 500],
         ];
@@ -102,7 +107,7 @@ class Settings extends Model
     {
         return ! empty($this->licenseKey)
             && ! empty($this->widgetPublicKey)
-            && ! empty($this->enabledSections);
+            && (! empty($this->enabledSections) || ! empty($this->enabledProductTypes));
     }
 
     /**

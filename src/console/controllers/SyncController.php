@@ -4,10 +4,8 @@ namespace Dz0nika\AngieChatCraft\console\controllers;
 
 use Craft;
 use craft\console\Controller;
-use craft\elements\Entry;
 use craft\helpers\Console;
 use Dz0nika\AngieChatCraft\AngieChat;
-use Dz0nika\AngieChatCraft\jobs\SyncElementJob;
 use yii\console\ExitCode;
 
 /**
@@ -35,33 +33,16 @@ class SyncController extends Controller
         }
 
         $settings = AngieChat::$plugin->getSettings();
-        $sections = $settings->enabledSections ?? [];
 
-        if ($sections === []) {
-            $this->stderr("No enabledSections in Angie Chat settings.\n", Console::FG_RED);
+        if (empty($settings->enabledSections) && empty($settings->enabledProductTypes)) {
+            $this->stderr("No enabledSections or enabledProductTypes in Angie Chat settings.\n", Console::FG_RED);
 
             return ExitCode::UNSPECIFIED_ERROR;
         }
 
-        $queued = 0;
+        $queued = AngieChat::$plugin->queueFullSync();
 
-        foreach ($sections as $handle) {
-            $entries = Entry::find()->section($handle)->status('live')->all();
-
-            foreach ($entries as $entry) {
-                Craft::$app->getQueue()->push(new SyncElementJob([
-                    'entryId'  => (int) $entry->id,
-                    'entryUid' => (string) $entry->uid,
-                    'siteId'   => (int) $entry->siteId,
-                    'action'   => 'upsert',
-                ]));
-                $queued++;
-            }
-
-            $this->stdout("  [{$handle}] queued " . count($entries) . " entries\n", Console::FG_GREEN);
-        }
-
-        $this->stdout("\nQueued {$queued} sync jobs total.\n", Console::FG_CYAN);
+        $this->stdout("Queued {$queued} sync jobs total.\n", Console::FG_CYAN);
 
         if ($this->runQueue) {
             $this->stdout("Running queue...\n", Console::FG_CYAN);

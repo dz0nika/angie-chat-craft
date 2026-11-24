@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-24
+
+### Added
+- **Craft Commerce product sync**: pick product types under *Commerce Products* in the plugin settings (or `enabledProductTypes` in `config/angie-chat.php`). Each product is sent with its own fields plus one line per variant: name, SKU, price, sale price and stock status. Saves and deletes sync automatically; *Force Sync All Data* and `php craft angie-chat/sync/all` include products.
+- **Sold-out refresh**: when a completed order leaves a variant out of stock, its product is re-synced so the assistant stops offering it.
+- **Stock edit refresh**: setting or adjusting stock by hand (Commerce → Inventory, imports) re-syncs the product right away.
+- **Automatic price/schedule refresh**: when a catalog pricing rule or sale starts, ends, is edited or deleted, or a product hits its post/expiry date, the affected products are re-synced within 5 minutes. No cron: the check runs on normal site traffic, at most once per 5 minutes, and queues only what changed.
+
+- Products that are disabled, expired or not yet live are removed from the AI index when saved.
+
 ## [1.0.9] - 2026-09-10
 
 ### Added

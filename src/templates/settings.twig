@@ -321,6 +321,38 @@
         {% endif %}
     </div>
 
+    {# Commerce Product Types #}
+    {% if productTypes|length > 0 %}
+        <div style="margin-top: 24px;">
+            <h2>Commerce Products</h2>
+            <p style="color: #64748b; margin-bottom: 16px;">
+                Select which product types should be synced. The AI gets each product's fields plus every
+                variant's price, sale price and stock status, and refreshes a product when it sells out.
+            </p>
+
+            <div class="angie-sections-list">
+                {% for type in productTypes %}
+                    <div class="angie-section-card">
+                        <div class="angie-section-header">
+                            <div>
+                                {{ forms.checkbox({
+                                    label: type.name,
+                                    name: 'enabledProductTypes[]',
+                                    value: type.handle,
+                                    checked: type.handle in settings.enabledProductTypes
+                                }) }}
+                                <div class="angie-section-meta">
+                                    Handle: <code>{{ type.handle }}</code>
+                                </div>
+                            </div>
+                            <span class="angie-entry-count">{{ type.productCount }} products</span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
     <hr>
 
     {# Widget Settings #}

@@ -14,6 +14,9 @@ return [
     // Section handles to sync (e.g., ['products', 'articles'])
     'enabledSections' => [],
 
+    // Craft Commerce product type handles to sync (e.g., ['clothing'])
+    'enabledProductTypes' => [],
+
     // Enable abandoned cart tracking (requires Craft Commerce)
     'enableAbandonedCart' => false,
 

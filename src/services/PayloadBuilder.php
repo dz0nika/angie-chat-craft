@@ -4,6 +4,8 @@ namespace Dz0nika\AngieChatCraft\services;
 
 use Craft;
 use craft\base\Component;
+use craft\base\Element;
+use craft\commerce\elements\Product;
 use craft\elements\Asset;
 use craft\elements\Entry;
 use craft\fields\Matrix;
@@ -51,9 +53,72 @@ class PayloadBuilder extends Component
     }
 
     /**
+     * Build a payload from a Craft Commerce product: its own fields plus one
+     * line per variant with price, sale price and availability.
+     */
+    public function buildFromProduct(Product $product): array
+    {
+        $content = trim($this->extractContent($product) . "\n\n" . $this->describeVariants($product));
+
+        return [
+            'entry_id' => $product->id ?? 0,
+            'entry_uid' => $product->uid ?? '',
+            'site_id' => $product->siteId ?? 1,
+            'title' => $product->title ?? '',
+            'url' => $product->getUrl() ?? '',
+            'content' => $content,
+            'image_url' => $this->extractPrimaryImage($product),
+            'section' => 'products',
+            'type' => $product->getType()->handle,
+            // Stock and catalog prices change without a product save, so the
+            // backend must never dedupe a product re-sync as "unchanged".
+            'updated_at' => (new \DateTime())->format('c'),
+        ];
+    }
+
+    private function describeVariants(Product $product): string
+    {
+        $lines = [];
+
+        foreach ($product->getVariants() as $variant) {
+            try {
+                $currency = $variant->getStore()->getCurrency()?->getCode();
+                $money = fn (?float $amount) => $amount === null
+                    ? ''
+                    : Craft::$app->getFormatter()->asCurrency($amount, $currency);
+
+                $price = $money($variant->getSalePrice());
+                if ($variant->getPromotionalPrice() !== null) {
+                    $price .= ' (on sale, regular price ' . $money($variant->getPrice()) . ')';
+                }
+
+                $availability = match (true) {
+                    ! $variant->hasStock() => 'out of stock',
+                    $variant->getIsAvailable() => 'in stock',
+                    default => 'not available for purchase',
+                };
+
+                $sku = $variant->getSkuAsText();
+
+                $lines[] = '- ' . implode(' | ', array_filter([
+                    $variant->title,
+                    $sku !== '' ? "SKU {$sku}" : '',
+                    $price,
+                    $availability,
+                ]));
+            } catch (\Throwable $e) {
+                // One broken variant must not drop the whole product
+                continue;
+            }
+        }
+
+        return $lines === [] ? '' : "Variants (name | SKU | price | availability):\n" . implode("\n", $lines);
+    }
+
+    /**
      * Extract all text content from an entry's fields.
      */
-    public function extractContent(Entry $entry): string
+    public function extractContent(Element $entry): string
     {
         $parts = [];
 
@@ -264,7 +329,7 @@ class PayloadBuilder extends Component
     /**
      * Extract the primary/featured image URL from an entry.
      */
-    public function extractPrimaryImage(Entry $entry): ?string
+    public function extractPrimaryImage(Element $entry): ?string
     {
         $fieldLayout = $entry->getFieldLayout();
         if (! $fieldLayout) {
