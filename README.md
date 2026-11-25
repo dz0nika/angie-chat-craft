@@ -1,13 +1,25 @@
-# Angie Chat - Craft CMS Plugin
+# Angie Chat for Craft CMS
 
-AI-powered customer service chat widget for Craft CMS 5. This plugin connects your Craft content to the Angie Chat SaaS platform, enabling intelligent product Q&A and customer support.
+An AI chat assistant for Craft CMS 5 and Craft Commerce 5. It answers shoppers' questions from your own content, products, prices and stock, in their language, and hands the conversation to your team when it can't help.
+
+## What it does
+
+- **Answers from your content.** Entries from the sections you choose (channels, structures and singles), including nested Matrix blocks, categories and tags. When the answer isn't in your content, it says so and offers to connect the shopper with your team instead of making something up.
+- **Knows your catalogue.** Commerce products with every variant's price, sale price and stock, so "a men's winter coat under $500?" gets real products, prices and links.
+- **Stays up to date on its own.** Saves, deletes, sold-out variants, stock edits, sales and pricing rules, and scheduled entries sync through the Craft queue. No cron to set up.
+- **Speaks your shoppers' language.** Every site of a multi-site install is synced; answers follow the shopper's language and link to the matching language version. The chat window itself is available in English, French, Spanish and German, or follows the page language.
+- **Human handoff.** Shoppers can ask for a person: your team gets an email and can take over the chat from the Angie Chat dashboard or reply by email. If nobody picks it up within 10 minutes, the assistant carries on.
+- **Made for storefronts.** The widget loads asynchronously and never calls the API while your pages render; links from the chat open in the same tab, and the conversation follows the shopper across pages and tabs.
+- **Secure by default.** Server keys stay on the server and can come from environment variables, every request is HMAC-signed, and the browser key is locked to your domain (plus localhost for development).
+- **Insights.** See the questions it couldn't answer and teach it the answers from the dashboard.
+- **Optional:** abandoned cart recovery emails (Craft Commerce, Craft Pro).
 
 ## Requirements
 
-- Craft CMS 5.0 or later (Craft **Pro** edition if you use cart recovery — Craft Commerce requires it)
-- PHP 8.2 or later
-- An active [Angie Chat](https://angiechat.com) subscription
-- Cart recovery additionally needs Craft Commerce 4/5 and the *Abandoned Cart Recovery* add-on
+- Craft CMS 5.0 or later and PHP 8.2 or later
+- Craft Commerce 5 for product sync (optional)
+- An [Angie Chat](https://angiechat.com) account
+- Cart recovery additionally needs Craft Pro and the *Abandoned Cart Recovery* add-on
 
 ## Installation
 
