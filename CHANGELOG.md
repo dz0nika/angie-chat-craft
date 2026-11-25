@@ -8,10 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Image Field** setting: pick the Assets field that holds the product photo shown on product cards in the chat. Run *Sync All Content* after changing it.
+- **Product photos for chat product cards are found automatically**: common photo fields first, then any Assets field; only images, skipping size charts, logos and downloads by field, folder or file name (e.g. a `size_guides/` folder). Products without a photo of their own use their default variant's, then one inside their blocks (Matrix).
+- Optional **Image Field** setting to pick the field yourself if the detection guesses wrong. Run *Sync All Content* after changing it.
 
 ### Fixed
-- **The product photo is picked correctly.** The first Assets field was used even when it held a size guide or a logo. Now the chosen Image Field, then common photo handles (`images`, `gallery`, `productPhotos`…), then any other Assets field not named like a size guide, logo or download. Only images count. Products without one use their default variant's image.
+- The first Assets field was sent as the product image even when it held a size chart.
 
 ## [1.1.3] - 2026-11-25
 

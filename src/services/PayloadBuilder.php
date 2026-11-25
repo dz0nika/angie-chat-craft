@@ -390,60 +390,110 @@ class PayloadBuilder extends Component
         return implode(' ', array_filter($parts));
     }
 
+    /** Not a product photo: size charts, logos, downloads (field handle, folder or file name). */
+    private const NOT_A_PHOTO = '/size|guide|chart|taille|logo|icon|badge|pdf|doc|file|download|video/i';
+
     /**
-     * The product or entry photo shown on chat product cards: the field
-     * picked in the plugin settings, else a common image handle, else any
-     * Assets field that is not a size guide, logo or download. Images only.
-     * Products without one fall back to their default variant.
+     * The product or entry photo shown on chat product cards, found
+     * automatically: common photo handles first, then any Assets field;
+     * images only, skipping size charts, logos and downloads by field,
+     * folder or file name. Products without one use their default variant,
+     * then images inside their blocks (Matrix). The optional Image Field
+     * setting overrides the detection.
      */
     public function extractPrimaryImage(Element $element): ?string
     {
-        $url = $this->imageFrom($element);
-        if ($url === null && $element instanceof Product) {
-            $variant = $element->getDefaultVariant();
-            $url = $variant ? $this->imageFrom($variant) : null;
+        $chosen = AngieChat::getInstance()?->getSettings()->imageField;
+        $candidates = [$element];
+        if ($element instanceof Product && ($variant = $element->getDefaultVariant())) {
+            $candidates[] = $variant;
         }
 
-        return $url;
+        foreach ($candidates as $candidate) {
+            if ($chosen && ($url = $this->imageIn($candidate, $chosen, false))) {
+                return $url;
+            }
+        }
+        foreach ($candidates as $candidate) {
+            if ($url = $this->imageFrom($candidate)) {
+                return $url;
+            }
+        }
+        foreach ($candidates as $candidate) {
+            foreach ($this->nestedEntries($candidate) as $block) {
+                if ($url = $this->imageFrom($block)) {
+                    return $url;
+                }
+            }
+        }
+
+        return null;
     }
 
     private function imageFrom(Element $element): ?string
     {
-        $fieldLayout = $element->getFieldLayout();
-        if (! $fieldLayout) {
-            return null;
-        }
-
-        $handles = array_filter([
-            AngieChat::getInstance()?->getSettings()->imageField,
+        $handles = [
             'featuredImage', 'image', 'images', 'productImage', 'productImages', 'productPhotos',
             'photo', 'photos', 'gallery', 'mainImage', 'heroImage', 'coverImage', 'thumbnail', 'picture', 'pictures',
-        ]);
-        foreach ($fieldLayout->getCustomFields() as $field) {
-            if ($field instanceof AssetsField && ! preg_match('/size|guide|chart|logo|icon|badge|pdf|doc|file|download|video/i', $field->handle)) {
+        ];
+        foreach ($element->getFieldLayout()?->getCustomFields() ?? [] as $field) {
+            if ($field instanceof AssetsField) {
                 $handles[] = $field->handle;
             }
         }
 
         foreach (array_unique($handles) as $handle) {
-            if (! $fieldLayout->getFieldByHandle($handle) instanceof AssetsField) {
-                continue;
-            }
-
-            try {
-                $value = $element->getFieldValue($handle);
-                $asset = $value instanceof ElementQueryInterface
-                    ? (clone $value)->kind('image')->one()
-                    : collect($value)->first(fn ($a) => $a instanceof Asset && $a->kind === Asset::KIND_IMAGE);
-                if ($asset instanceof Asset && ($url = $asset->getUrl())) {
-                    return $url;
-                }
-            } catch (\Throwable) {
-                continue;
+            if (! preg_match(self::NOT_A_PHOTO, $handle) && ($url = $this->imageIn($element, $handle, true))) {
+                return $url;
             }
         }
 
         return null;
+    }
+
+    /** First image in an Assets field; $filter skips size charts and logos by folder or file name. */
+    private function imageIn(Element $element, string $handle, bool $filter): ?string
+    {
+        if (! $element->getFieldLayout()?->getFieldByHandle($handle) instanceof AssetsField) {
+            return null;
+        }
+
+        try {
+            $value = $element->getFieldValue($handle);
+            $assets = $value instanceof ElementQueryInterface ? (clone $value)->kind('image')->limit(10)->all() : $value;
+            foreach ($assets as $asset) {
+                if ($asset instanceof Asset && $asset->kind === Asset::KIND_IMAGE
+                    && ! ($filter && preg_match(self::NOT_A_PHOTO, (string) $asset->getPath()))
+                    && ($url = $asset->getUrl())) {
+                    return $url;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return null;
+    }
+
+    /** @return Element[] Entries inside the element's Matrix fields (one level). */
+    private function nestedEntries(Element $element): array
+    {
+        $blocks = [];
+        foreach ($element->getFieldLayout()?->getCustomFields() ?? [] as $field) {
+            if (! $field instanceof Matrix) {
+                continue;
+            }
+            try {
+                $value = $element->getFieldValue($field->handle);
+                foreach ($value instanceof ElementQueryInterface ? (clone $value)->limit(20)->all() : $value as $block) {
+                    if ($block instanceof Element) {
+                        $blocks[] = $block;
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return $blocks;
     }
 
     /**
