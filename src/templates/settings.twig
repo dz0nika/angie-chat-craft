@@ -330,6 +330,25 @@
         {% endif %}
     </div>
 
+    {# Product photo for chat cards #}
+    {% set imageFieldOptions = [{ label: 'Detect automatically', value: '' }] %}
+    {% for field in craft.app.fields.getAllFields() %}
+        {% if field is instance of('craft\\fields\\Assets') %}
+            {% set imageFieldOptions = imageFieldOptions|merge([{ label: field.name ~ ' (' ~ field.handle ~ ')', value: field.handle }]) %}
+        {% endif %}
+    {% endfor %}
+    <div style="margin-top: 24px;">
+        {{ forms.selectField({
+            label: 'Image Field',
+            instructions: 'The photo shown on product cards in the chat. Automatic detection skips fields named like size guides, logos or downloads. Run **Sync All Content** after changing it.',
+            id: 'imageField',
+            name: 'imageField',
+            options: imageFieldOptions,
+            value: settings.imageField,
+            errors: settings.getErrors('imageField')
+        }) }}
+    </div>
+
     {# Commerce Product Types #}
     {% if productTypes|length > 0 %}
         <div style="margin-top: 24px;">

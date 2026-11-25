@@ -86,6 +86,13 @@ class Settings extends Model
      */
     public string $excludeSelectors = '';
 
+    /**
+     * Assets field whose first image is the photo on chat product cards.
+     * Empty: detected (common handles, then any Assets field that is not a
+     * size guide, logo or download).
+     */
+    public string $imageField = '';
+
     public function defineRules(): array
     {
         return [
@@ -94,6 +101,7 @@ class Settings extends Model
             [['enabledSections', 'enabledProductTypes'], 'each', 'rule' => ['string']],
             [['enableAbandonedCart', 'autoInjectWidget'], 'boolean'],
             [['excludeSelectors'], 'string', 'max' => 500],
+            [['imageField'], 'string', 'max' => 64],
         ];
     }
 

@@ -3,6 +3,7 @@
 namespace Dz0nika\AngieChatCraft\services;
 
 use Craft;
+use Dz0nika\AngieChatCraft\AngieChat;
 use craft\base\Component;
 use craft\base\Element;
 use craft\base\NestedElementInterface;
@@ -390,82 +391,56 @@ class PayloadBuilder extends Component
     }
 
     /**
-     * Extract the primary/featured image URL from an entry.
+     * The product or entry photo shown on chat product cards: the field
+     * picked in the plugin settings, else a common image handle, else any
+     * Assets field that is not a size guide, logo or download. Images only.
+     * Products without one fall back to their default variant.
      */
-    public function extractPrimaryImage(Element $entry): ?string
+    public function extractPrimaryImage(Element $element): ?string
     {
-        $fieldLayout = $entry->getFieldLayout();
+        $url = $this->imageFrom($element);
+        if ($url === null && $element instanceof Product) {
+            $variant = $element->getDefaultVariant();
+            $url = $variant ? $this->imageFrom($variant) : null;
+        }
+
+        return $url;
+    }
+
+    private function imageFrom(Element $element): ?string
+    {
+        $fieldLayout = $element->getFieldLayout();
         if (! $fieldLayout) {
             return null;
         }
 
-        $commonImageHandles = [
-            'featuredImage',
-            'image',
-            'heroImage',
-            'thumbnail',
-            'photo',
-            'mainImage',
-            'productImage',
-            'coverImage',
-        ];
-
-        foreach ($commonImageHandles as $handle) {
-            try {
-                $value = $entry->getFieldValue($handle);
-
-                if ($value) {
-                    $asset = $this->getFirstAsset($value);
-                    if ($asset) {
-                        return $asset->getUrl();
-                    }
-                }
-            } catch (\Exception $e) {
-                continue;
-            }
-        }
-
+        $handles = array_filter([
+            AngieChat::getInstance()?->getSettings()->imageField,
+            'featuredImage', 'image', 'images', 'productImage', 'productImages', 'productPhotos',
+            'photo', 'photos', 'gallery', 'mainImage', 'heroImage', 'coverImage', 'thumbnail', 'picture', 'pictures',
+        ]);
         foreach ($fieldLayout->getCustomFields() as $field) {
-            if (! ($field instanceof AssetsField)) {
+            if ($field instanceof AssetsField && ! preg_match('/size|guide|chart|logo|icon|badge|pdf|doc|file|download|video/i', $field->handle)) {
+                $handles[] = $field->handle;
+            }
+        }
+
+        foreach (array_unique($handles) as $handle) {
+            if (! $fieldLayout->getFieldByHandle($handle) instanceof AssetsField) {
                 continue;
             }
 
             try {
-                $value = $entry->getFieldValue($field->handle);
-                $asset = $this->getFirstAsset($value);
-
-                if ($asset) {
-                    return $asset->getUrl();
+                $value = $element->getFieldValue($handle);
+                $asset = $value instanceof ElementQueryInterface
+                    ? (clone $value)->kind('image')->one()
+                    : collect($value)->first(fn ($a) => $a instanceof Asset && $a->kind === Asset::KIND_IMAGE);
+                if ($asset instanceof Asset && ($url = $asset->getUrl())) {
+                    return $url;
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable) {
                 continue;
             }
-        }
-
-        return null;
-    }
-
-    /**
-     * Get the first asset from an asset query or collection.
-     */
-    private function getFirstAsset($value): ?Asset
-    {
-        if ($value instanceof Asset) {
-            return $value;
-        }
-
-        if (is_iterable($value)) {
-            foreach ($value as $item) {
-                if ($item instanceof Asset) {
-                    return $item;
-                }
-            }
-        }
-
-        if (is_object($value) && method_exists($value, 'one')) {
-            $asset = $value->one();
-
-            return $asset instanceof Asset ? $asset : null;
         }
 
         return null;

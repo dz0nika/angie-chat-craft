@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Image Field** setting: pick the Assets field that holds the product photo shown on product cards in the chat. Run *Sync All Content* after changing it.
+
+### Fixed
+- **The product photo is picked correctly.** The first Assets field was used even when it held a size guide or a logo. Now the chosen Image Field, then common photo handles (`images`, `gallery`, `productPhotos`…), then any other Assets field not named like a size guide, logo or download. Only images count. Products without one use their default variant's image.
+
 ## [1.1.3] - 2026-11-25
 
 ### Fixed
