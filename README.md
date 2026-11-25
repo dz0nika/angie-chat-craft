@@ -59,7 +59,8 @@ When you save an entry in an enabled section, the plugin:
 
 1. Extracts text content from all fields (including Matrix blocks)
 2. Strips HTML and flattens nested content
-3. Extracts the primary image URL
+3. Finds the product or entry photo (photo fields first, then variants and blocks; size charts,
+   logos and downloads are skipped). Pick the field yourself under **Image Field** if needed
 4. Queues a background job to send data to Angie Chat
 
 The sync happens asynchronously via Craft's queue, so your Control Panel stays fast.
@@ -132,6 +133,7 @@ return [
     'widgetUrl' => 'https://cdn.angiechat.com/widget.js',
     'autoInjectWidget' => true,
     'excludeSelectors' => '.no-chat, #checkout',
+    'imageField' => '', // optional: Assets field handle for product photos
 ];
 ```
 
