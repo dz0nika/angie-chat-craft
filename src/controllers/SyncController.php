@@ -27,7 +27,7 @@ class SyncController extends Controller
 
         $settings = AngieChat::$plugin->getSettings();
 
-        if (empty($settings->licenseKey)) {
+        if (empty($settings->getLicenseKey())) {
             Craft::$app->getSession()->setError('Please configure your license key first.');
 
             return $this->redirect('settings/plugins/angie-chat');

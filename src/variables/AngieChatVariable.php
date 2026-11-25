@@ -102,11 +102,11 @@ class AngieChatVariable
 
         try {
             $settings = AngieChat::$plugin->getSettings();
-            if (! $settings || empty($settings->licenseKey)) {
+            if (! $settings || empty($settings->getLicenseKey())) {
                 return '';
             }
 
-            $key = $settings->licenseKey;
+            $key = $settings->getLicenseKey();
             if (strlen($key) <= 12) {
                 return str_repeat('*', strlen($key));
             }

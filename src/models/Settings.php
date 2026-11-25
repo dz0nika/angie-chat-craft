@@ -3,6 +3,7 @@
 namespace Dz0nika\AngieChatCraft\models;
 
 use craft\base\Model;
+use craft\helpers\App;
 
 /**
  * Plugin settings model.
@@ -103,10 +104,30 @@ class Settings extends Model
      * the webhook secret is checked separately by isFullyConfigured() so
      * existing installs can keep syncing during the grace period.
      */
+    /*
+     * The keys may be stored as "$ENV_VAR" (recommended: keeps secrets out of
+     * project config, and staging/production each use their own .env). Always
+     * read them through these getters.
+     */
+    public function getLicenseKey(): string
+    {
+        return trim((string) App::parseEnv($this->licenseKey));
+    }
+
+    public function getWidgetPublicKey(): string
+    {
+        return trim((string) App::parseEnv($this->widgetPublicKey));
+    }
+
+    public function getWebhookSecret(): string
+    {
+        return trim((string) App::parseEnv($this->webhookSecret));
+    }
+
     public function isConfigured(): bool
     {
-        return ! empty($this->licenseKey)
-            && ! empty($this->widgetPublicKey)
+        return $this->getLicenseKey() !== ''
+            && $this->getWidgetPublicKey() !== ''
             && (! empty($this->enabledSections) || ! empty($this->enabledProductTypes));
     }
 
@@ -118,7 +139,7 @@ class Settings extends Model
      */
     public function isFullyConfigured(): bool
     {
-        return $this->isConfigured() && ! empty($this->webhookSecret);
+        return $this->isConfigured() && $this->getWebhookSecret() !== '';
     }
 
     /**
@@ -126,7 +147,7 @@ class Settings extends Model
      */
     public function isTestMode(): bool
     {
-        return str_contains($this->licenseKey, '_test_');
+        return str_contains($this->getLicenseKey(), '_test_');
     }
 
     /**

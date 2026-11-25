@@ -54,11 +54,11 @@ class UsageService extends Component
     {
         $settings = $this->getSettings();
 
-        if (! $settings || empty($settings->licenseKey)) {
+        if (! $settings || empty($settings->getLicenseKey())) {
             return ['status' => self::STATUS_UNKNOWN];
         }
 
-        $cacheKey = 'angie_chat_usage_' . md5($settings->licenseKey);
+        $cacheKey = 'angie_chat_usage_' . md5($settings->getLicenseKey());
 
         if (! $forceRefresh) {
             $cached = Craft::$app->getCache()->get($cacheKey);
@@ -123,11 +123,11 @@ class UsageService extends Component
         // timeouts). Read only the cached status, which queue jobs refresh,
         // and fail open: block only when we KNOW the customer is over quota.
         $settings = $this->getSettings();
-        if (! $settings || empty($settings->licenseKey)) {
+        if (! $settings || empty($settings->getLicenseKey())) {
             return true;
         }
 
-        $cached = Craft::$app->getCache()->get('angie_chat_usage_' . md5($settings->licenseKey));
+        $cached = Craft::$app->getCache()->get('angie_chat_usage_' . md5($settings->getLicenseKey()));
 
         return ($cached['status'] ?? self::STATUS_UNKNOWN) !== self::STATUS_BLOCKED;
     }
@@ -140,11 +140,11 @@ class UsageService extends Component
     {
         $settings = $this->getSettings();
 
-        if (! $settings || empty($settings->licenseKey)) {
+        if (! $settings || empty($settings->getLicenseKey())) {
             return;
         }
 
-        Craft::$app->getCache()->delete('angie_chat_usage_' . md5($settings->licenseKey));
+        Craft::$app->getCache()->delete('angie_chat_usage_' . md5($settings->getLicenseKey()));
     }
 
     private function getApi(): ApiService

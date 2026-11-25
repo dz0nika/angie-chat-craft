@@ -243,9 +243,16 @@
             </p>
         </div>
 
-        {{ forms.passwordField({
+        <p style="margin: 0 0 12px; font-size: 13px; color: #64748b;">
+            Tip: use environment variables, e.g. <code>$ANGIE_LICENSE_KEY</code>, <code>$ANGIE_WIDGET_KEY</code>
+            and <code>$ANGIE_WEBHOOK_SECRET</code> set in each environment's <code>.env</code>. Typed values are saved
+            to project config, so staging keys would travel to production with the next deploy.
+        </p>
+
+        {{ forms.autosuggestField({
             label: 'License Key',
             instructions: 'Server-only secret. Authenticates outbound webhooks from this Craft site.',
+            suggestEnvVars: true,
             id: 'licenseKey',
             name: 'licenseKey',
             value: settings.licenseKey,
@@ -254,7 +261,8 @@
             errors: settings.getErrors('licenseKey')
         }) }}
 
-        {{ forms.textField({
+        {{ forms.autosuggestField({
+            suggestEnvVars: true,
             label: 'Widget Public Key',
             instructions: 'Safe to expose in HTML. Used by the chat widget; domain-locked server-side.',
             id: 'widgetPublicKey',
@@ -264,7 +272,8 @@
             errors: settings.getErrors('widgetPublicKey')
         }) }}
 
-        {{ forms.passwordField({
+        {{ forms.autosuggestField({
+            suggestEnvVars: true,
             label: 'Webhook Secret',
             instructions: 'Server-only HMAC key. Every outbound webhook is signed with this secret so the backend can verify it really came from your Craft install.',
             id: 'webhookSecret',
@@ -274,7 +283,7 @@
             errors: settings.getErrors('webhookSecret')
         }) }}
 
-        {% if not settings.webhookSecret and settings.licenseKey %}
+        {% if not settings.getWebhookSecret() and settings.getLicenseKey() %}
             <div style="margin-top: 12px; padding: 10px 14px; background: #fefce8; border: 1px solid #fde68a; border-radius: 6px; color: #854d0e; font-size: 13px;">
                 <strong>Grace period:</strong> No webhook secret configured yet. Outbound webhooks will continue
                 working unsigned for now, but Angie Chat will start requiring HMAC signatures soon. Add the

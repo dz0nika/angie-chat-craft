@@ -6,6 +6,7 @@ use Craft;
 use craft\commerce\elements\Product;
 use craft\elements\Entry;
 use craft\queue\BaseJob;
+use yii\queue\RetryableJobInterface;
 use Dz0nika\AngieChatCraft\AngieChat;
 
 /**
@@ -23,8 +24,11 @@ use Dz0nika\AngieChatCraft\AngieChat;
  * For "delete" actions the entry is already gone; we just forward the IDs
  * we captured at event time.
  */
-class SyncElementJob extends BaseJob
+class SyncElementJob extends BaseJob implements RetryableJobInterface
 {
+    /** Attempts for a rate-limited (429), server-side (5xx) or network failure. */
+    private const MAX_ATTEMPTS = 5;
+
     /** Primary key of the Craft entry. */
     public int $entryId;
 
@@ -69,12 +73,12 @@ class SyncElementJob extends BaseJob
                 ->status(null)
                 ->one();
 
-            // A disabled, expired or not-yet-live product must not be offered by the AI.
-            // (Products are primary-site only; entries keep re-indexing as before
-            // because per-site saves of a multi-site entry would race here.)
-            $productNotLive = $entry instanceof Product && $entry->getStatus() !== 'live';
+            // Disabled, expired or scheduled entries and products must not reach
+            // the AI (a Black Friday promo prepared ahead would leak early).
+            // Status is per site, and each site version is its own job.
+            $notLive = $entry !== null && $entry->getStatus() !== 'live';
 
-            if ($this->action === 'delete' || $productNotLive) {
+            if ($this->action === 'delete' || $notLive) {
                 $apiService->delete([
                     'entry_id'  => $this->entryId,
                     'entry_uid' => $this->entryUid,
@@ -126,7 +130,7 @@ class SyncElementJob extends BaseJob
                 __METHOD__
             );
 
-            if ($this->isRetryable($errorMsg)) {
+            if ($this->isRetryable($e)) {
                 throw $e;
             }
         }
@@ -141,16 +145,28 @@ class SyncElementJob extends BaseJob
         return "Angie Chat: Sync entry #{$this->entryId} to AI";
     }
 
-    private function isRetryable(string $message): bool
+    /**
+     * Also the pause between attempts: Craft retries a failed job once its
+     * reservation (this TTR) expires.
+     */
+    public function getTtr(): int
     {
-        $nonRetryable = ['invalid license', 'expired license', 'unauthorized', '401'];
+        return 120;
+    }
 
-        foreach ($nonRetryable as $keyword) {
-            if (str_contains(strtolower($message), $keyword)) {
-                return false;
-            }
-        }
+    public function canRetry($attempt, $error): bool
+    {
+        return $attempt < self::MAX_ATTEMPTS && $error instanceof \Throwable && $this->isRetryable($error);
+    }
 
-        return true;
+    /**
+     * 429 (busy), 5xx and network errors (code 0) heal on their own; a bad
+     * key (401), forbidden (403) or invalid payload (422) never will.
+     */
+    private function isRetryable(\Throwable $e): bool
+    {
+        $code = (int) $e->getCode();
+
+        return $code === 0 || $code === 429 || $code >= 500;
     }
 }

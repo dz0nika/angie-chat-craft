@@ -47,7 +47,7 @@ class CartsController extends Controller
 
         $settings = AngieChat::$plugin->getSettings();
 
-        if (empty($settings->licenseKey)) {
+        if (empty($settings->getLicenseKey())) {
             $this->stderr("Angie Chat: No license key configured. Skipping.\n");
             return ExitCode::CONFIG;
         }

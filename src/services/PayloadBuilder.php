@@ -5,6 +5,7 @@ namespace Dz0nika\AngieChatCraft\services;
 use Craft;
 use craft\base\Component;
 use craft\base\Element;
+use craft\base\NestedElementInterface;
 use craft\commerce\elements\Product;
 use craft\elements\Asset;
 use craft\elements\Entry;
@@ -12,6 +13,10 @@ use craft\fields\Matrix;
 use craft\fields\Assets as AssetsField;
 use craft\fields\PlainText;
 use craft\fields\Entries as EntriesField;
+use craft\elements\db\ElementQueryInterface;
+use craft\elements\ElementCollection;
+use craft\helpers\MoneyHelper;
+use Money\Money;
 
 /**
  * Payload Builder - Extracts and cleans content from Craft entries.
@@ -27,6 +32,9 @@ use craft\fields\Entries as EntriesField;
  */
 class PayloadBuilder extends Component
 {
+    /** Nesting levels of blocks-in-blocks to read (page builders nest 2-3 deep). */
+    private const MAX_DEPTH = 4;
+
     /**
      * Build a complete payload from a Craft Entry.
      */
@@ -42,6 +50,8 @@ class PayloadBuilder extends Component
             'entry_id' => $entry->id ?? 0,
             'entry_uid' => $entry->uid ?? '',
             'site_id' => $entry->siteId ?? 1,
+            // Two-letter site language, so answers use the shopper's language version.
+            'language' => substr((string) $entry->getSite()->language, 0, 2),
             'title' => $entry->title ?? '',
             'url' => $entry->getUrl() ?? '',
             'content' => $content,
@@ -64,6 +74,8 @@ class PayloadBuilder extends Component
             'entry_id' => $product->id ?? 0,
             'entry_uid' => $product->uid ?? '',
             'site_id' => $product->siteId ?? 1,
+            // Two-letter site language, so answers use the shopper's language version.
+            'language' => substr((string) $product->getSite()->language, 0, 2),
             'title' => $product->title ?? '',
             'url' => $product->getUrl() ?? '',
             'content' => $content,
@@ -153,23 +165,43 @@ class PayloadBuilder extends Component
     /**
      * Extract value from a specific field type.
      */
-    private function extractFieldValue($field, $value): string
+    private function extractFieldValue($field, $value, int $depth = 0): string
     {
         try {
+            if ($field instanceof AssetsField) {
+                return '';
+            }
+
             if ($field instanceof Matrix) {
-                return $this->extractMatrixContent($value);
+                return $this->extractMatrixContent($value, $depth);
             }
 
             if ($field instanceof EntriesField) {
                 return $this->extractRelatedEntries($value);
             }
 
-            if ($field instanceof AssetsField) {
+            if ($field instanceof PlainText) {
+                return (string) $value;
+            }
+
+            // Categories, tags, nested blocks of page builders (Neo, Super
+            // Table, Matrix inside Matrix...): their content or titles. Cast
+            // to string, a query only gives its class name.
+            if ($value instanceof ElementQueryInterface || $value instanceof ElementCollection) {
+                return $this->extractElements($field->name, $value, $depth);
+            }
+
+            if (is_bool($value)) {
                 return '';
             }
 
-            if ($field instanceof PlainText) {
-                return (string) $value;
+            // Number fields: a bare number means nothing without its label.
+            if (is_int($value) || is_float($value)) {
+                return "{$field->name}: {$value}";
+            }
+
+            if ($value instanceof Money) {
+                return "{$field->name}: ".MoneyHelper::toString($value);
             }
 
             if (is_string($value)) {
@@ -185,8 +217,8 @@ class PayloadBuilder extends Component
             }
 
             return '';
-        } catch (\Exception $e) {
-            // Never crash on field extraction
+        } catch (\Throwable $e) {
+            // Never crash on field extraction (third-party field types too)
             return '';
         }
     }
@@ -194,9 +226,9 @@ class PayloadBuilder extends Component
     /**
      * Extract content from Matrix fields (Craft 5 nested entries).
      */
-    private function extractMatrixContent($matrixQuery): string
+    private function extractMatrixContent($matrixQuery, int $depth = 0): string
     {
-        if (! $matrixQuery) {
+        if (! $matrixQuery || $depth >= self::MAX_DEPTH) {
             return '';
         }
 
@@ -213,11 +245,11 @@ class PayloadBuilder extends Component
             }
 
             foreach ($entries as $block) {
-                if (! $block instanceof Entry) {
+                if (! $block instanceof Element) {
                     continue;
                 }
 
-                $blockContent = $this->extractBlockContent($block);
+                $blockContent = $this->extractBlockContent($block, $depth + 1);
 
                 if (! empty($blockContent)) {
                     $parts[] = $blockContent;
@@ -232,9 +264,10 @@ class PayloadBuilder extends Component
     }
 
     /**
-     * Extract content from a single Matrix block (nested entry).
+     * Extract content from a single Matrix block (nested entry), or a block
+     * of another page builder. Same rules as top-level fields, one level down.
      */
-    private function extractBlockContent(Entry $block): string
+    private function extractBlockContent(Element $block, int $depth): string
     {
         $parts = [];
 
@@ -250,24 +283,54 @@ class PayloadBuilder extends Component
                 continue;
             }
 
-            if ($field instanceof AssetsField) {
-                continue;
-            }
-
-            if (is_string($value)) {
-                $cleaned = $this->stripHtml($value);
-                if (! empty($cleaned)) {
-                    $parts[] = $cleaned;
-                }
-            } elseif (is_object($value) && method_exists($value, '__toString')) {
-                $cleaned = $this->stripHtml((string) $value);
-                if (! empty($cleaned)) {
-                    $parts[] = $cleaned;
-                }
+            $extracted = trim($this->extractFieldValue($field, $value, $depth));
+            if ($extracted !== '') {
+                $parts[] = $extracted;
             }
         }
 
-        return implode(' ', $parts);
+        return implode("\n", $parts);
+    }
+
+    /**
+     * Elements in a relation or nested field: nested blocks contribute their
+     * content, everything else (categories, tags, users) its title.
+     */
+    private function extractElements(string $label, $value, int $depth): string
+    {
+        if ($depth >= self::MAX_DEPTH) {
+            return '';
+        }
+
+        $elements = $value instanceof ElementQueryInterface
+            ? (clone $value)->limit(50)->all()
+            : $value->all();
+
+        $titles = [];
+        $blocks = [];
+
+        foreach ($elements as $element) {
+            if (! $element instanceof Element || $element instanceof Asset) {
+                continue;
+            }
+
+            // Only blocks owned by this element are read in full; related
+            // elements (users, categories, other entries) give just a title,
+            // so nobody's profile fields end up in the AI index.
+            if ($element instanceof NestedElementInterface && $element->getOwnerId() !== null) {
+                $content = $this->extractBlockContent($element, $depth + 1);
+                if ($content !== '') {
+                    $blocks[] = $content;
+                }
+            } elseif ($element::hasTitles() && $element->title) {
+                $titles[] = $element->title;
+            }
+        }
+
+        return trim(implode("\n", array_filter([
+            $titles !== [] ? "{$label}: ".implode(', ', $titles) : '',
+            ...$blocks,
+        ])));
     }
 
     /**
@@ -454,7 +517,9 @@ class PayloadBuilder extends Component
 
         $text = preg_replace('/\n{3,}/', "\n\n", $text);
 
-        $text = preg_replace('/^\s+|\s+$/m', '', $text);
+        // Trim each line, but keep the line breaks: removing them glued
+        // words together ("Bottesdefault-bg").
+        $text = preg_replace('/^[ \t]+|[ \t]+$/m', '', $text);
 
         return trim($text);
     }

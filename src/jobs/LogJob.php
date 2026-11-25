@@ -31,7 +31,7 @@ class LogJob extends BaseJob
 
         $settings = AngieChat::$plugin->getSettings();
 
-        if (empty($settings->licenseKey)) {
+        if (empty($settings->getLicenseKey())) {
             return;
         }
 
@@ -54,7 +54,7 @@ class LogJob extends BaseJob
 
             $client->post($url, [
                 'headers' => array_merge([
-                    'X-Craft-License' => $settings->licenseKey,
+                    'X-Craft-License' => $settings->getLicenseKey(),
                     'Content-Type'    => 'application/json',
                     'Accept'          => 'application/json',
                     'User-Agent'      => 'AngieChatCraft/1.0',

@@ -37,13 +37,14 @@ class WidgetService extends Component
             // the registered domain check. The secret license key NEVER
             // leaves the server (used only for outbound webhooks).
             //
-            // For un-migrated installs (no widgetPublicKey set yet) we fall
-            // back to the legacy data-license so the customer's site keeps
-            // working until they paste the new key. Backend rate-limits
-            // and logs unsigned widget origins identically.
-            $widgetCredential = ! empty($settings->widgetPublicKey)
-                ? $settings->widgetPublicKey
-                : $settings->licenseKey;
+            // No widget public key: no widget. Falling back to the license
+            // key would print a server secret into every page.
+            $widgetCredential = $settings->getWidgetPublicKey();
+            if ($widgetCredential === '') {
+                Craft::warning('Angie Chat: Widget Public Key missing, widget not rendered.', __METHOD__);
+
+                return '';
+            }
 
             $attributes = [
                 'src'             => $this->versionedWidgetUrl($settings->widgetUrl),
@@ -84,7 +85,7 @@ class WidgetService extends Component
         try {
             $settings = $this->getSettings();
 
-            if (! $settings || empty($settings->licenseKey)) {
+            if (! $settings || empty($settings->getLicenseKey())) {
                 return false;
             }
 
@@ -195,7 +196,7 @@ class WidgetService extends Component
         $settings = $this->getSettings();
 
         return [
-            'licenseKey' => $settings->licenseKey,
+            'widgetKey' => $settings->getWidgetPublicKey(),
             'apiEndpoint' => $settings->apiEndpoint,
             'widgetUrl' => $settings->widgetUrl,
             'testMode' => $settings->isTestMode(),

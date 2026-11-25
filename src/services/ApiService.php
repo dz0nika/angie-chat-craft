@@ -126,7 +126,7 @@ class ApiService extends Component
      */
     public function getEnabledFeatures(): array
     {
-        $cacheKey = 'angie_chat_enabled_features_' . md5($this->getSettings()->licenseKey);
+        $cacheKey = 'angie_chat_enabled_features_' . md5($this->getSettings()->getLicenseKey());
         $cached   = Craft::$app->getCache()->get($cacheKey);
 
         if ($cached !== false) {
@@ -220,7 +220,7 @@ class ApiService extends Component
         $settings = $this->getSettings();
 
         return [
-            'X-Craft-License' => $settings->licenseKey,
+            'X-Craft-License' => $settings->getLicenseKey(),
         ];
     }
 
@@ -239,7 +239,7 @@ class ApiService extends Component
     {
         $settings = $this->getSettings();
 
-        if (empty($settings->webhookSecret)) {
+        if (empty($settings->getWebhookSecret())) {
             Craft::warning(
                 'Angie Chat: webhook secret not configured — request will be sent unsigned. '
                 . 'Add the webhook secret from your dashboard to enable HMAC verification.',
@@ -250,7 +250,7 @@ class ApiService extends Component
         }
 
         $timestamp = (string) time();
-        $signature = hash_hmac('sha256', $timestamp . '.' . $body, $settings->webhookSecret);
+        $signature = hash_hmac('sha256', $timestamp . '.' . $body, $settings->getWebhookSecret());
 
         return [
             'X-Angie-Timestamp' => $timestamp,
@@ -273,21 +273,22 @@ class ApiService extends Component
             Craft::error("Angie Chat: unauthorized ({$endpoint}): {$message}", __METHOD__);
 
             // "Unauthorized:" keeps SyncElementJob::isRetryable() treating it as final.
-            throw new \RuntimeException("Unauthorized: {$message}");
+            throw new \RuntimeException("Unauthorized: {$message}", 401);
         }
 
         if ($statusCode === 403) {
             $message = $body['message'] ?? 'Access forbidden';
             Craft::warning("Angie Chat API forbidden ({$endpoint}): {$message}", __METHOD__);
 
-            throw new \RuntimeException($message);
+            throw new \RuntimeException($message, 403);
         }
 
         if ($statusCode >= 400) {
             $message = $body['message'] ?? 'API request failed';
             Craft::error("Angie Chat API error ({$endpoint}): {$message}", __METHOD__);
 
-            throw new \RuntimeException($message);
+            // The status lets SyncElementJob retry 429/5xx but not 4xx.
+            throw new \RuntimeException($message, $statusCode);
         }
 
         return $body;

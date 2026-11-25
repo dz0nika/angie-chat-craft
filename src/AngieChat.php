@@ -122,7 +122,7 @@ class AngieChat extends Plugin
         /** @var Settings $settings */
         $settings = $this->getSettings();
 
-        if (empty($settings->licenseKey)) {
+        if (empty($settings->getLicenseKey())) {
             Craft::warning('Angie Chat: No license key configured. Plugin is dormant.', __METHOD__);
 
             return;
@@ -173,9 +173,17 @@ class AngieChat extends Plugin
                     return;
                 }
 
-                $this->dispatchSyncJob($entry, 'delete');
+                $this->dispatchForAllSites($entry, 'delete');
             }
         );
+
+        // Entries go live or expire on a clock, not on a save (same approach
+        // as products: piggyback on normal traffic, no cron).
+        if (! Craft::$app->getRequest()->getIsConsoleRequest()) {
+            Craft::$app->on(\yii\base\Application::EVENT_AFTER_REQUEST, function () use ($enabledSections) {
+                $this->syncScheduledEntryChanges($enabledSections);
+            });
+        }
 
         Craft::info('Angie Chat: Entry sync events registered for sections: '.implode(', ', $enabledSections), __METHOD__);
     }
@@ -226,17 +234,16 @@ class AngieChat extends Plugin
         Event::on(Product::class, Element::EVENT_AFTER_SAVE, function (ModelEvent $event) use ($types) {
             $product = $event->sender;
 
-            // Saves propagate to every site and the backend keeps one record per
-            // product, so only the primary-site save is sent.
-            if ($product->siteId === Craft::$app->getSites()->getPrimarySite()->id
-                && $this->shouldSyncProduct($product, $types)) {
+            // A save propagates to every site and fires once per site; each
+            // language version is indexed on its own (backend keys by site).
+            if ($this->shouldSyncProduct($product, $types)) {
                 $this->dispatchSyncJob($product, 'upsert');
             }
         });
 
         Event::on(Product::class, Element::EVENT_AFTER_DELETE, function (Event $event) use ($types) {
             if ($this->shouldSyncProduct($event->sender, $types)) {
-                $this->dispatchSyncJob($event->sender, 'delete');
+                $this->dispatchForAllSites($event->sender, 'delete');
             }
         });
 
@@ -262,7 +269,7 @@ class AngieChat extends Plugin
                 }
 
                 foreach ($soldOut as $product) {
-                    $this->dispatchSyncJob($product, 'upsert');
+                    $this->dispatchForAllSites($product, 'upsert');
                 }
             } catch (\Throwable $e) {
                 Craft::warning('Angie Chat: Sold-out refresh failed: ' . $e->getMessage(), __METHOD__);
@@ -311,6 +318,46 @@ class AngieChat extends Plugin
             Craft::$app->on(\yii\base\Application::EVENT_AFTER_REQUEST, function () use ($types) {
                 $this->syncScheduledProductChanges($types);
             });
+        }
+    }
+
+    /**
+     * Queue entries whose post or expiry date passed since the last check, in
+     * every site: the job indexes the ones now live and removes the expired.
+     * Runs at most once per 5 minutes.
+     */
+    public function syncScheduledEntryChanges(array $sections): int
+    {
+        $cache = Craft::$app->getCache();
+
+        if (! $cache->add('angie-chat:entry-schedule-lock', 1, 300)) {
+            return 0;
+        }
+
+        try {
+            $now = new \DateTime();
+            $since = $cache->get('angie-chat:entry-schedule-checked-at') ?: (clone $now)->modify('-1 hour');
+            $from = Db::prepareDateForDb($since);
+            $to = Db::prepareDateForDb($now);
+            $crossed = fn (string $col) => ['and', ['>', $col, $from], ['<=', $col, $to]];
+
+            $queued = $this->queueRows('entry', Entry::find()
+                ->section($sections)
+                ->siteId('*')
+                ->status(null)
+                ->andWhere(['or', $crossed('entries.postDate'), $crossed('entries.expiryDate')]));
+
+            $cache->set('angie-chat:entry-schedule-checked-at', $now);
+
+            if ($queued > 0) {
+                Craft::info("Angie Chat: Re-syncing {$queued} entries after post/expiry dates passed", __METHOD__);
+            }
+
+            return $queued;
+        } catch (\Throwable $e) {
+            Craft::warning('Angie Chat: Entry schedule check failed: ' . $e->getMessage(), __METHOD__);
+
+            return 0;
         }
     }
 
@@ -396,12 +443,12 @@ class AngieChat extends Plugin
             : $this->queueRows('product', $this->productQuery($types)->id(array_unique($productIds)));
     }
 
-    /** Enabled product types on the primary site, any status (non-live ones sync as deletes). */
+    /** Enabled product types, one row per site (language), any status (non-live ones sync as deletes). */
     private function productQuery(array $types): ElementQuery
     {
         return Product::find()
             ->type($types)
-            ->siteId(Craft::$app->getSites()->getPrimarySite()->id)
+            ->siteId('*')
             ->status(null);
     }
 
@@ -432,7 +479,15 @@ class AngieChat extends Plugin
         return in_array($section->handle, $enabledSections, true);
     }
 
-    private function dispatchSyncJob(Element $entry, string $action): void
+    /** One job per site the element exists in (each language is indexed separately). */
+    private function dispatchForAllSites(Element $element, string $action): void
+    {
+        foreach (\craft\helpers\ElementHelper::supportedSitesForElement($element) as $site) {
+            $this->dispatchSyncJob($element, $action, (int) $site['siteId']);
+        }
+    }
+
+    private function dispatchSyncJob(Element $entry, string $action, ?int $siteId = null): void
     {
         try {
             // Phase 2: pass only lightweight identifiers. All heavy payload
@@ -441,7 +496,7 @@ class AngieChat extends Plugin
             Craft::$app->getQueue()->push(new SyncElementJob([
                 'entryId'  => (int) $entry->id,
                 'entryUid' => (string) $entry->uid,
-                'siteId'   => (int) $entry->siteId,
+                'siteId'   => $siteId ?? (int) $entry->siteId,
                 'action'   => $action,
                 'elementType' => $entry instanceof Entry ? 'entry' : 'product',
             ]));
@@ -524,11 +579,8 @@ class AngieChat extends Plugin
         $sections = [];
 
         try {
+            // Singles included: shipping, returns and FAQ pages are often Singles.
             foreach (Craft::$app->getEntries()->getAllSections() as $section) {
-                if ($section->type === 'single') {
-                    continue;
-                }
-
                 $sections[] = [
                     'handle' => $section->handle ?? '',
                     'name' => $section->name ?? 'Unknown',
@@ -579,7 +631,8 @@ class AngieChat extends Plugin
         $queued = 0;
 
         foreach ($settings->enabledSections ?? [] as $handle) {
-            $queued += $this->queueRows('entry', Entry::find()->section($handle)->status('live'));
+            // Any status: non-live ones are sent as deletes (cleans up promos indexed before going live).
+            $queued += $this->queueRows('entry', Entry::find()->section($handle)->siteId('*')->status(null));
         }
 
         if ($this->commerceEnabled() && ! empty($settings->enabledProductTypes)) {
@@ -615,7 +668,7 @@ class AngieChat extends Plugin
         /** @var Settings $settings */
         $settings = $this->getSettings();
 
-        if (empty($settings->licenseKey)) {
+        if (empty($settings->getLicenseKey())) {
             return [
                 'connected' => false,
                 'message' => 'No license key configured',
@@ -686,7 +739,7 @@ class AngieChat extends Plugin
             }
 
             $settings = self::$plugin->getSettings();
-            if (empty($settings->licenseKey)) {
+            if (empty($settings->getLicenseKey())) {
                 return;
             }
 

@@ -27,8 +27,7 @@ Search for "Angie Chat" in the Craft Plugin Store and click Install.
 1. **Get Your License Key**
    - Log in to your [Angie Chat Dashboard](https://app.angiechat.com)
    - Navigate to **Websites** → Select your website → **Settings**
-   - Copy your **Craft License Key**, **Widget Public Key** and **Webhook Secret**
-     (the secret is shown once when generated — rotate it in the dashboard if lost)
+   - Open **Connection & Syncing** and copy the **License Key**, **Widget Public Key** and **Webhook Secret**
 
 2. **Configure the Plugin**
    - In Craft, go to **Settings** → **Plugins** → **Angie Chat**
@@ -95,13 +94,26 @@ driven by the shopper's real Commerce cart:
 
 ## Configuration File
 
-You can override settings via `config/angie-chat.php`:
+Keep the keys in each environment's `.env` and reference them from the plugin settings as
+`$ANGIE_LICENSE_KEY`, `$ANGIE_WIDGET_KEY` and `$ANGIE_WEBHOOK_SECRET` (the fields suggest your
+environment variables). Typed keys are stored in project config, so a staging key would reach
+production with the next deploy and production content would be synced into the staging website.
+
+```dotenv
+ANGIE_LICENSE_KEY=sk_angie_live_...
+ANGIE_WIDGET_KEY=pk_widget_...
+ANGIE_WEBHOOK_SECRET=whk_...
+```
+
+You can also override settings via `config/angie-chat.php`:
 
 ```php
 <?php
 
 return [
-    'licenseKey' => getenv('ANGIE_LICENSE_KEY'),
+    'licenseKey' => '$ANGIE_LICENSE_KEY',
+    'widgetPublicKey' => '$ANGIE_WIDGET_KEY',
+    'webhookSecret' => '$ANGIE_WEBHOOK_SECRET',
     'enabledSections' => ['products', 'articles'],
     'enableAbandonedCart' => true,
     'apiEndpoint' => 'https://app.angiechat.com',
@@ -117,7 +129,7 @@ If you disable auto-injection, add the widget manually in your template:
 
 ```twig
 {% if craft.app.plugins.isPluginEnabled('angie-chat') %}
-    {{ craft.angieChat.widget.renderWidgetScript()|raw }}
+    {{ craft.angieChat.widgetScript|raw }}
 {% endif %}
 ```
 

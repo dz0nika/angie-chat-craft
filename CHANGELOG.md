@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-11-25
+
+### Fixed
+- **Every language is synced.** Stores with several sites (e.g. French and English) now sync each language version of entries and products, so the assistant answers English shoppers with English content and `/en/` links. Force Sync, sold-out and price refreshes, and deletes cover all sites.
+- **Content in nested blocks is synced.** Text inside Matrix blocks nested in other blocks (page builders), Categories, Tags and other relation fields used to arrive as `craft\elements\db\ElementQuery`. They now send their text or titles. Number and Money fields are sent with their field name ("Poids (kg): 2.5"). Users' profile fields are never read.
+- Line breaks between fields are kept, so words no longer run together ("Bottesdefault").
+- A broken third-party field can no longer stop an entry from syncing.
+- **Scheduled, disabled and expired entries are no longer indexed** (a Black Friday promo prepared ahead of time could be quoted by the assistant early). Entries are synced automatically when their post date arrives and removed when they expire, checked every 5 minutes on normal site traffic. *Force Sync All Data* also removes entries that are not live.
+- **Singles can be selected** under Content Sections (shipping, returns and FAQ pages are often Singles).
+- **Sync jobs retry** after a rate limit (429), a server error (5xx) or a network failure: up to 5 attempts, 2 minutes apart. Invalid keys or payloads fail right away.
+- **The license key is never printed into pages.** Without a Widget Public Key the widget is simply not rendered (it used to fall back to the secret license key), and `craft.angieChat.widgetConfig` no longer contains it.
+
+### Added
+- **Environment variables for the keys.** License Key, Widget Public Key and Webhook Secret accept `$ENV_VAR` values (the fields suggest your variables), so staging and production each use their own keys and secrets stay out of project config.
+
+### Upgrade
+Update the plugin, move the keys to `.env` and set the fields to `$ANGIE_LICENSE_KEY`, `$ANGIE_WIDGET_KEY` and `$ANGIE_WEBHOOK_SECRET`, then run **Force Sync All Data** once so existing content is re-sent per language.
+
 ## [1.1.2] - 2026-11-24
 
 ### Fixed
