@@ -11,7 +11,7 @@ An AI chat assistant for Craft CMS 5 and Craft Commerce 5. It answers shoppers' 
 - **Human handoff.** Shoppers can ask for a person: your team gets an email and can take over the chat from the Angie Chat dashboard or reply by email. If nobody picks it up within 10 minutes, the assistant carries on.
 - **Made for storefronts.** The widget loads asynchronously and never calls the API while your pages render; links from the chat open in the same tab, and the conversation follows the shopper across pages and tabs.
 - **Secure by default.** Server keys stay on the server and can come from environment variables, every request is HMAC-signed, and the browser key is locked to your domain (plus localhost for development).
-- **Insights.** See the questions it couldn't answer and teach it the answers from the dashboard.
+- **Insights.** See the questions it couldn't answer and teach it the answer once: it is used whatever language the shopper asks in. Agencies can give each client a login limited to their own websites, to read conversations and answer those questions themselves.
 - **Optional:** abandoned cart recovery emails (Craft Commerce, Craft Pro).
 
 ## Requirements
