@@ -12,6 +12,7 @@ An AI chat assistant for Craft CMS 5 and Craft Commerce 5. It answers shoppers' 
 - **Made for storefronts.** The widget loads asynchronously and never calls the API while your pages render; links from the chat open in the same tab, and the conversation follows the shopper across pages and tabs.
 - **Secure by default.** Server keys stay on the server and can come from environment variables, every request is HMAC-signed, and the browser key is locked to your domain (plus localhost for development).
 - **Insights.** See the questions it couldn't answer and teach it the answer once: it is used whatever language the shopper asks in. Agencies can give each client a login limited to their own websites, to read conversations and answer those questions themselves.
+- **Add to cart from the chat** (Craft Commerce). Product cards under answers show the photo and price, and shoppers pick a size or colour and add the product without leaving the chat. Your theme can listen for the `angie:cart-updated` event to refresh its mini-cart.
 - **Optional:** abandoned cart recovery emails (Craft Commerce, Craft Pro).
 
 ## Requirements

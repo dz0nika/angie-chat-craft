@@ -4,6 +4,7 @@ namespace Dz0nika\AngieChatCraft\services;
 
 use Craft;
 use craft\base\Component;
+use craft\helpers\UrlHelper;
 use Dz0nika\AngieChatCraft\AngieChat;
 use Dz0nika\AngieChatCraft\models\Settings;
 
@@ -61,6 +62,20 @@ class WidgetService extends Component
 
             if ($settings->isTestMode()) {
                 $attributes['data-test-mode'] = 'true';
+            }
+
+            // "Add to cart" on the chat's product cards posts to Commerce's own
+            // cart action from the shopper's browser: same origin, so their
+            // cart session and CSRF token just work. Paths, not absolute URLs,
+            // so a site served on another host than its base URL still works.
+            if (Craft::$app->getPlugins()->isPluginEnabled('commerce')) {
+                $path = fn (string $url) => parse_url($url, PHP_URL_PATH) . (($q = parse_url($url, PHP_URL_QUERY)) ? "?{$q}" : '');
+                $attributes['data-cart-add'] = $path(UrlHelper::actionUrl('commerce/cart/update-cart'));
+                $attributes['data-session-info'] = $path(UrlHelper::actionUrl('users/session-info'));
+                $cartPage = \craft\commerce\Plugin::getInstance()?->getSettings()->loadCartRedirectUrl;
+                if ($cartPage) {
+                    $attributes['data-cart-page'] = $path(UrlHelper::siteUrl($cartPage));
+                }
             }
 
             $defaultApi = 'https://app.angiechat.com';

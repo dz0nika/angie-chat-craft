@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-11-26
+
+### Added
+- **Add to cart from the chat.** Product cards in the chat get an *Add to cart* button, with a size/colour picker when a product has several variants in stock. It uses Commerce's own cart action from the shopper's browser, so their cart session and CSRF token work as on your product pages, and Commerce's stock rules apply. After adding, the card links to your cart page (Commerce's *Load Cart Redirect URL* setting).
+- The widget fires an `angie:cart-updated` event on `window` (with the cart in `event.detail.cart`) so your theme can refresh its mini-cart.
+
+### Upgrade
+- Run **Sync All Content** once after updating, so products are sent with their variants.
+
 ## [1.1.4] - 2026-11-25
 
 ### Added

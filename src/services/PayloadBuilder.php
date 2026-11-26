@@ -83,10 +83,40 @@ class PayloadBuilder extends Component
             'image_url' => $this->extractPrimaryImage($product),
             'section' => 'products',
             'type' => $product->getType()->handle,
+            // For the "add to cart" button on the chat's product cards.
+            'variants' => $this->variantList($product),
             // Stock and catalog prices change without a product save, so the
             // backend must never dedupe a product re-sync as "unchanged".
             'updated_at' => (new \DateTime())->format('c'),
         ];
+    }
+
+    /**
+     * The variants a shopper can pick on the chat's product card.
+     *
+     * @return list<array{id: int, title: string, price: string, on_sale: bool, in_stock: bool}>
+     */
+    private function variantList(Product $product): array
+    {
+        $variants = [];
+
+        foreach ($product->getVariants() as $variant) {
+            try {
+                $amount = $variant->getSalePrice();
+                $variants[] = [
+                    'id' => (int) $variant->id,
+                    'title' => (string) $variant->title,
+                    'price' => $amount === null ? '' : Craft::$app->getFormatter()->asCurrency($amount, $variant->getStore()->getCurrency()?->getCode()),
+                    'on_sale' => $variant->getPromotionalPrice() !== null,
+                    'in_stock' => $variant->hasStock() && $variant->getIsAvailable(),
+                ];
+            } catch (\Throwable $e) {
+                // One broken variant must not drop the others
+                continue;
+            }
+        }
+
+        return array_slice($variants, 0, 100);
     }
 
     private function describeVariants(Product $product): string
