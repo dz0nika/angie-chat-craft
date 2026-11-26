@@ -68,10 +68,14 @@ class WidgetService extends Component
             // cart action from the shopper's browser: same origin, so their
             // cart session and CSRF token just work. Paths, not absolute URLs,
             // so a site served on another host than its base URL still works.
+            // Under the current site's base URL ("/en/actions/…"), like a cart
+            // form on that page: actionUrl() always uses the primary site, and
+            // a new cart would belong to it (emails and errors in its language).
             if (Craft::$app->getPlugins()->isPluginEnabled('commerce')) {
                 $path = fn (string $url) => parse_url($url, PHP_URL_PATH) . (($q = parse_url($url, PHP_URL_QUERY)) ? "?{$q}" : '');
-                $attributes['data-cart-add'] = $path(UrlHelper::actionUrl('commerce/cart/update-cart'));
-                $attributes['data-session-info'] = $path(UrlHelper::actionUrl('users/session-info'));
+                $action = fn (string $route) => $path(UrlHelper::siteUrl(Craft::$app->getConfig()->getGeneral()->actionTrigger . '/' . $route));
+                $attributes['data-cart-add'] = $action('commerce/cart/update-cart');
+                $attributes['data-session-info'] = $action('users/session-info');
                 $cartPage = \craft\commerce\Plugin::getInstance()?->getSettings()->loadCartRedirectUrl;
                 if ($cartPage) {
                     $attributes['data-cart-page'] = $path(UrlHelper::siteUrl($cartPage));

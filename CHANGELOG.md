@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-11-26
+
+### Fixed
+- **Multi-site stores:** *Add to cart* from the chat now runs on the shopper's own site (`/en/actions/…` on the English site), like a cart form on that page. A cart started from the chat used to belong to the primary site, so its emails and messages came in the primary site's language.
+
 ## [1.2.0] - 2026-11-26
 
 ### Added
